@@ -1,28 +1,48 @@
+// Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+// import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js"; // Uncomment if you plan to use Firebase Analytics
 
-// Global Firebase variables (provided by Canvas environment)
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+// Your web app's Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyA_jVdsnGlcUSjVvJ4LiYsIWSXW3GJSMy0",
+    authDomain: "federal-archive.firebaseapp.com",
+    projectId: "federal-archive",
+    storageBucket: "federal-archive.firebasestorage.app",
+    messagingSenderId: "512366620766",
+    appId: "1:512366620766:web:89ad91ac6b7d16b097c4cf",
+    measurementId: "G-HEHFZZWL1E"
+};
+
+// Use the projectId as the appId for Firestore path, as it's unique to your project
+const appId = firebaseConfig.projectId;
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+// const analytics = getAnalytics(app); // Uncomment if you plan to use Firebase Analytics
 
 let currentUserId = null; // To store the authenticated user's ID
 
 // Authenticate user: This listener updates currentUserId based on auth state.
-// It does NOT force anonymous sign-in here to allow the admin login flow to work.
+// It will try to sign in anonymously if no user is logged in.
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUserId = user.uid;
         console.log("Authenticated user:", currentUserId);
+        // If an authenticated user logs in, we don't need anonymous sign-in
     } else {
-        currentUserId = null; // Clear user ID if logged out
-        console.log("User logged out or not authenticated.");
+        // If no user is logged in (including after logout from admin), sign in anonymously for public access
+        try {
+            await signInAnonymously(auth);
+            currentUserId = auth.currentUser.uid;
+            console.log("Signed in anonymously:", currentUserId);
+        } catch (error) {
+            console.error("Firebase anonymous authentication error:", error);
+            window.showMessageBox("Authentication failed. Please try again.");
+        }
     }
     // Dispatch event for main script to react to auth state changes
     document.dispatchEvent(new CustomEvent('firebaseAuthReady', { detail: { db, auth, currentUserId, appId } }));
@@ -35,10 +55,10 @@ window.firebase = {
     appId,
     getAuth,
     signInAnonymously,
-    signInWithCustomToken,
+    signInWithCustomToken, // Not used for GitHub Pages directly, but kept for completeness
     onAuthStateChanged,
-    signInWithEmailAndPassword, // Expose for admin login
-    signOut, // Expose for admin logout
+    signInWithEmailAndPassword,
+    signOut,
     collection,
     addDoc,
     getDocs,
@@ -120,6 +140,37 @@ window.showDocumentDetail = function(documentData) {
 window.hideDocumentDetail = function() {
     detailModal.style.display = 'none'; // Hide the modal
 }
+
+// Sidebar Toggle for Mobile
+const menuToggle = document.getElementById('menu-toggle');
+const sidebar = document.getElementById('sidebar');
+
+menuToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('-translate-x-full');
+    if (!sidebar.classList.contains('-translate-x-full')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'sidebar-overlay';
+        overlay.classList.add('fixed', 'inset-0', 'bg-black', 'bg-opacity-50', 'z-30', 'lg:hidden');
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            overlay.remove();
+        });
+    } else {
+        document.getElementById('sidebar-overlay')?.remove();
+    }
+});
+
+// Close sidebar when a link is clicked on mobile
+document.querySelectorAll('.sidebar-link').forEach(link => {
+    link.addEventListener('click', () => {
+        if (window.innerWidth < 1024) {
+            sidebar.classList.add('-translate-x-full');
+            document.getElementById('sidebar-overlay')?.remove();
+        }
+    });
+});
+
 
 // Function to render content based on category
 async function renderContent(category) {
@@ -770,13 +821,9 @@ async function fetchDocuments(category = 'all', filters = {}) {
     }
 }
 
-// Removed getMockDocuments function as per request.
-
 // Admin Panel Functions
 async function setupAdminPanel() {
     if (!db || !currentUserId || auth.currentUser.isAnonymous) {
-        // This case should ideally not be reached if renderContent handles it,
-        // but as a safeguard, ensure the user is not anonymous.
         document.getElementById('admin-document-list').innerHTML = '<p class="text-red-400">Authentication required to access admin features. Please log in.</p>';
         return;
     }
