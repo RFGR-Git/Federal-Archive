@@ -429,57 +429,6 @@ async function renderContent(category) {
                 </div>
             `;
             break;
-        case 'advanced-search':
-            breadcrumbText = 'Advanced Search';
-            contentHtml = `
-                <h2 class="text-3xl font-bold mb-6 text-blue-400">Advanced Search Across All Archives</h2>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Document Type(s)</label>
-                    <div class="flex flex-wrap gap-4">
-                        <label class="flex items-center">
-                            <input type="checkbox" name="doc-type" value="federal-law" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-gray-300">Federal Laws</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="doc-type" value="executive-document" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-gray-300">Executive Documents</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="doc-type" value="judicial-document" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-gray-300">Judicial Documents</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="doc-type" value="treaty-resolution" class="form-checkbox h-5 w-5 text-blue-600 rounded">
-                            <span class="ml-2 text-gray-300">Treaties & Resolutions</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                        <label for="advanced-keywords-filter" class="block text-sm font-medium text-gray-300 mb-1">Keywords / Full Text</label>
-                        <input type="text" id="advanced-keywords-filter" placeholder="Global keyword search" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label for="advanced-year-from" class="block text-sm font-medium text-gray-300 mb-1">Date Range (From)</label>
-                        <input type="number" id="advanced-year-from" placeholder="YYYY" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label for="advanced-year-to" class="block text-sm font-medium text-gray-300 mb-1">Year Range (To)</label>
-                        <input type="number" id="advanced-year-to" placeholder="YYYY" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row gap-4">
-                    <button id="perform-advanced-search" class="flex-1 py-3 px-6 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200">Perform Advanced Search</button>
-                    <button id="clear-advanced-search" class="flex-1 py-3 px-6 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200">Clear Filters</button>
-                </div>
-
-                <div class="mt-10">
-                    <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="advanced-search-results">Loading results...</div>
-                </div>
-            `;
-            break;
         case 'admin-panel':
             // Check if authenticated AND NOT anonymous. If not, show login form.
             if (!auth.currentUser || auth.currentUser.isAnonymous) {
@@ -709,7 +658,8 @@ async function renderContent(category) {
                             // Use window.firebase.signInWithEmailAndPassword
                             await window.firebase.signInWithEmailAndPassword(auth, email, password);
                             window.showMessageBox("Logged in successfully!");
-                            // After successful login, onAuthStateChanged will trigger renderContent('admin-panel')
+                            // IMPORTANT: Re-render the admin panel after successful login
+                            renderContent('admin-panel'); // This will re-evaluate the auth.currentUser check
                         } catch (error) {
                             console.error("Login error:", error);
                             errorMessageDiv.textContent = `Login failed: ${error.message}`;
@@ -1189,7 +1139,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 const category = this.dataset.category;
-                // Since initializeFirebaseAndAuth is awaited, isFirebaseReady will be true here
+                
+                // Now that Firebase is initialized, we can safely render content
                 renderContent(category);
                 // Update active link styling
                 document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active-link'));
