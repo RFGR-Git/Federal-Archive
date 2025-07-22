@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federal Legal & Government Document Archive</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Roboto Slab for headings, Roboto/Open Sans for body -->
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="flex min-h-screen">
+
+    <!-- Mobile Hamburger Menu Button -->
+    <button id="menu-toggle" class="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-blue-950 text-white shadow-lg">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+    </button>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 w-72 bg-blue-950 text-white p-6 flex flex-col shadow-lg transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out z-40">
+        <div class="flex-shrink-0 mb-8">
+            <h1 class="text-2xl font-bold text-orange-500 font-slab">🇷🇺 Federal Archive</h1>
+            <p class="text-sm text-gray-300">Document Search Portal</p>
+        </div>
+
+        <nav class="flex-grow overflow-y-auto">
+            <ul class="space-y-2">
+                <li>
+                    <a href="#" data-category="federal-laws" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 active-link">
+                        <span class="mr-3 text-xl">📘</span>
+                        Federal Laws
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-category="executive-documents" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                        <span class="mr-3 text-xl">🏛</span>
+                        Executive Documents
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-category="judicial-documents" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                        <span class="mr-3 text-xl">👩‍⚖️</span>
+                        Judicial Documents
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-category="treaties-resolutions" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                        <span class="mr-3 text-xl">🌐</span>
+                        Treaties & Resolutions
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-category="advanced-search" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                        <span class="mr-3 text-xl">🔎</span>
+                        Advanced Search
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-category="archive-help" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                        <span class="mr-3 text-xl">⚙️</span>
+                        Archive Help & Guide
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-category="faqs" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                        <span class="mr-3 text-xl">❓</span>
+                        FAQs
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Admin Panel Link -->
+            <div class="mt-8 border-t border-blue-800 pt-6">
+                <h3 class="text-lg font-semibold mb-4 text-gray-200">Admin Tools</h3>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#" data-category="admin-panel" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                            <span class="mr-3 text-xl">🔑</span>
+                            Admin Panel
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 lg:ml-72 p-8 transition-all duration-300 ease-in-out">
+        <!-- Breadcrumb Navigation -->
+        <nav class="mb-6 text-gray-400">
+            <ol class="list-none p-0 inline-flex">
+                <li class="flex items-center">
+                    <a href="#" class="text-blue-400 hover:text-blue-600">Home</a>
+                    <span class="mx-2">/</span>
+                </li>
+                <li class="flex items-center">
+                    <span id="breadcrumb-category" class="font-semibold">Federal Laws</span>
+                </li>
+            </ol>
+        </nav>
+
+        <div id="main-content" class="bg-gray-700 p-8 rounded-lg shadow-xl min-h-[calc(100vh-160px)]">
+            <!-- Content will be dynamically loaded here -->
+        </div>
+    </main>
+
+    <!-- Message Box for alerts -->
+    <div id="message-box" class="fixed bottom-8 right-8 bg-blue-600 text-white p-4 rounded-lg shadow-lg hidden z-50">
+        <p id="message-text"></p>
+        <button class="absolute top-1 right-2 text-white text-lg" onclick="this.parentElement.classList.add('hidden')">&times;</button>
+    </div>
+
+    <!-- Document Detail Modal -->
+    <div id="document-detail-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="window.hideDocumentDetail()">&times;</span>
+            <h2 id="detail-title" class="text-3xl font-bold mb-4 text-blue-400"></h2>
+            <div id="detail-content" class="space-y-3 text-gray-200">
+                <!-- Detailed content will be injected here -->
+            </div>
+            <div class="mt-6">
+                <button id="view-document-external" class="py-2 px-4 bg-orange-500 text-white font-semibold rounded-md shadow-md hover:bg-orange-600 transition-colors duration-200">View Document Externally</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JavaScript file -->
+    <script type="module" src="js/script.js"></script>
+</body>
+</html>
