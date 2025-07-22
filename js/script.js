@@ -1,10 +1,10 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 // import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js"; // Uncomment if you plan to use Firebase Analytics
 
-// Your web app's Firebase configuration
+// Your web app's Firebase configuration (DO NOT CHANGE THIS - IT'S YOUR PROJECT'S UNIQUE CONFIG)
 const firebaseConfig = {
     apiKey: "AIzaSyA_jVdsnGlcUSjVvJ4LiYsIWSXW3GJSMy0",
     authDomain: "federal-archive.firebaseapp.com",
@@ -25,51 +25,7 @@ const auth = getAuth(app);
 // const analytics = getAnalytics(app); // Uncomment if you plan to use Firebase Analytics
 
 let currentUserId = null; // To store the authenticated user's ID
-
-// Authenticate user: This listener updates currentUserId based on auth state.
-// It will try to sign in anonymously if no user is logged in.
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        currentUserId = user.uid;
-        console.log("Authenticated user:", currentUserId);
-        // If an authenticated user logs in, we don't need anonymous sign-in
-    } else {
-        // If no user is logged in (including after logout from admin), sign in anonymously for public access
-        try {
-            await signInAnonymously(auth);
-            currentUserId = auth.currentUser.uid;
-            console.log("Signed in anonymously:", currentUserId);
-        } catch (error) {
-            console.error("Firebase anonymous authentication error:", error);
-            window.showMessageBox("Authentication failed. Please try again.");
-        }
-    }
-    // Dispatch event for main script to react to auth state changes
-    document.dispatchEvent(new CustomEvent('firebaseAuthReady', { detail: { db, auth, currentUserId, appId } }));
-});
-
-// Expose Firebase objects to the global scope for use in other scripts
-window.firebase = {
-    db,
-    auth,
-    appId,
-    getAuth,
-    signInAnonymously,
-    signInWithCustomToken, // Not used for GitHub Pages directly, but kept for completeness
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
-    signOut,
-    collection,
-    addDoc,
-    getDocs,
-    doc,
-    getDoc,
-    updateDoc,
-    deleteDoc,
-    onSnapshot,
-    query,
-    where
-};
+let isFirebaseReady = false; // Flag to ensure Firebase is fully initialized and auth state is known
 
 // Function to show custom message box - Exposed to window
 window.showMessageBox = function(message) {
@@ -329,7 +285,7 @@ async function renderContent(category) {
                     <div>
                         <label for="judicial-case-type-filter" class="block text-sm font-medium text-gray-300 mb-1">Case Type</label>
                         <select id="judicial-case-type-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Select Case Type</option>
+                            <option value="">Select Type</option>
                             <option value="criminal">Criminal</option>
                             <option value="civil">Civil</option>
                             <option value="administrative">Administrative</option>
@@ -544,16 +500,16 @@ async function renderContent(category) {
                     <p>Welcome to the Federal Legal & Government Document Archive. This guide will help you navigate and utilize the portal effectively.</p>
                     <h3 class="text-2xl font-bold mt-8 mb-4 text-blue-300">How to Use the Search Portal</h3>
                     <p>Use the sidebar on the left to select a document category. Each category provides specific filters to refine your search. Enter keywords, dates, or other relevant criteria and click "Search".</p>
-                    <h3 class="text-2xl font-bold mt-8 mb-4 text-blue-300">Understanding Search Results</h3>
+                    <h3 class="2xl font-bold mt-8 mb-4 text-blue-300">Understanding Search Results</h3>
                     <p>Search results are displayed in a list format. Click on a result card to see a detailed view of the document, including its full summary and metadata. A "View Document Externally" button is available for accessing official sources (placeholder in this demo).</p>
-                    <h3 class="text-2xl font-bold mt-8 mb-4 text-blue-300">Key Features</h3>
+                    <h3 class="2xl font-bold mt-8 mb-4 text-blue-300">Key Features</h3>
                     <ul>
                         <li><strong>Category-Specific Filters:</strong> Tailored search options for different document types.</li>
                         <li><strong>Advanced Search:</strong> Combine criteria across multiple categories for comprehensive searches.</li>
                         <li><strong>Responsive Design:</strong> Access the portal seamlessly on desktop, tablet, and mobile devices.</li>
                         <li><strong>Admin Panel:</strong> For authorized users to add, edit, and delete documents (requires authentication).</li>
                     </ul>
-                    <h3 class="text-2xl font-bold mt-8 mb-4 text-blue-300">Contact Support</h3>
+                    <h3 class="2xl font-bold mt-8 mb-4 text-blue-300">Contact Support</h3>
                     <p>If you encounter any issues or have questions, please refer to the <a href="#" data-category="faqs" class="text-blue-400 hover:underline">FAQs section</a> or contact our support team at <a href="mailto:support@archive.gov" class="text-blue-400 hover:underline">support@archive.gov</a>.</p>
                 </div>
             `;
@@ -563,7 +519,7 @@ async function renderContent(category) {
             contentHtml = `
                 <h2 class="text-3xl font-bold mb-6 text-blue-400">Frequently Asked Questions (FAQs)</h2>
                 <div class="prose text-gray-200 max-w-none">
-                    <h3 class="text-2xl font-bold mt-8 mb-4 text-blue-300">General Questions</h3>
+                    <h3 class="2xl font-bold mt-8 mb-4 text-blue-300">General Questions</h3>
                     <div class="mb-4">
                         <h4 class="text-xl font-semibold text-gray-200">Q: What kind of documents can I find here?</h4>
                         <p>A: This archive contains Federal Laws, Executive Documents (Presidential orders, ministerial decrees), Judicial Documents (court rulings), and International Treaties & Resolutions.</p>
@@ -573,7 +529,7 @@ async function renderContent(category) {
                         <p>A: The archive is updated regularly, typically within 24-48 hours of a document's official publication.</p>
                     </div>
 
-                    <h3 class="text-2xl font-bold mt-8 mb-4 text-blue-300">Search Questions</h3>
+                    <h3 class="2xl font-bold mt-8 mb-4 text-blue-300">Search Questions</h3>
                     <div class="mb-4">
                         <h4 class="text-xl font-semibold text-gray-200">Q: Can I search by multiple criteria?</h4>
                         <p>A: Yes, each category has specific filters. For a broader search, use the "Advanced Search" page to combine criteria across document types.</p>
@@ -605,7 +561,9 @@ async function renderContent(category) {
     breadcrumbCategory.textContent = breadcrumbText;
 
     // Attach event listeners for search and clear buttons
-    if (category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
+    // Only attach if Firebase is ready and currentUserId is available
+    // For public search, we don't need currentUserId to be non-anonymous, just authenticated.
+    if (isFirebaseReady && currentUserId && category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
         const searchButton = document.getElementById(`search-${category.replace('-', '')}`);
         const clearButton = document.getElementById(`clear-${category.replace('-', '')}`);
         const resultsDiv = document.getElementById(`${category}-results`);
@@ -613,7 +571,6 @@ async function renderContent(category) {
         if (searchButton) {
             searchButton.addEventListener('click', async () => {
                 resultsDiv.innerHTML = '<p class="text-gray-400">Searching...</p>';
-                // For demo, we'll pass filters to fetchDocuments
                 const filters = {};
                 if (category === 'federal-laws') {
                     filters.codeTitle = document.getElementById('law-title-filter').value;
@@ -673,29 +630,31 @@ async function renderContent(category) {
         const initialDocs = await fetchDocuments(category);
         resultsDiv.innerHTML = generateSearchResultsHtml(initialDocs);
         attachDocumentCardListeners();
-    } else if (category === 'admin-panel' && auth.currentUser && !auth.currentUser.isAnonymous) {
-        setupAdminPanel();
-    } else if (category === 'admin-panel' && (!auth.currentUser || auth.currentUser.isAnonymous)) {
-        // Attach login form listener if it's the admin login page
-        const loginForm = document.getElementById('admin-login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = document.getElementById('admin-email').value;
-                const password = document.getElementById('admin-password').value;
-                const errorMessageDiv = document.getElementById('login-error-message');
-                errorMessageDiv.classList.add('hidden'); // Hide previous errors
+    } else if (category === 'admin-panel') { // Admin panel logic
+        if (isFirebaseReady && auth.currentUser && !auth.currentUser.isAnonymous) {
+            setupAdminPanel();
+        } else {
+            // Attach login form listener if it's the admin login page
+            const loginForm = document.getElementById('admin-login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('admin-email').value;
+                    const password = document.getElementById('admin-password').value;
+                    const errorMessageDiv = document.getElementById('login-error-message');
+                    errorMessageDiv.classList.add('hidden'); // Hide previous errors
 
-                try {
-                    await window.firebase.signInWithEmailAndPassword(auth, email, password);
-                    window.showMessageBox("Logged in successfully!");
-                    // No need to call renderContent('admin-panel') here, onAuthStateChanged will handle it
-                } catch (error) {
-                    console.error("Login error:", error);
-                    errorMessageDiv.textContent = `Login failed: ${error.message}`;
-                    errorMessageDiv.classList.remove('hidden');
-                }
-            });
+                    try {
+                        await window.firebase.signInWithEmailAndPassword(auth, email, password);
+                        window.showMessageBox("Logged in successfully!");
+                        // After successful login, onAuthStateChanged will trigger renderContent('admin-panel')
+                    } catch (error) {
+                        console.error("Login error:", error);
+                        errorMessageDiv.textContent = `Login failed: ${error.message}`;
+                        errorMessageDiv.classList.remove('hidden');
+                    }
+                });
+            }
         }
     }
 }
@@ -707,8 +666,8 @@ function attachDocumentCardListeners() {
             const docId = this.dataset.docId;
             if (docId && db && currentUserId) {
                 try {
-                    // Fetch from the user's private collection
-                    const docRef = window.firebase.doc(db, `artifacts/${appId}/users/${currentUserId}/documents`, docId);
+                    // Fetch from the PUBLIC collection
+                    const docRef = window.firebase.doc(db, `artifacts/${appId}/public/documents`, docId);
                     const docSnap = await window.firebase.getDoc(docRef);
                     if (docSnap.exists()) {
                         window.showDocumentDetail({ id: docSnap.id, ...docSnap.data() });
@@ -728,14 +687,14 @@ function attachDocumentCardListeners() {
 
 // Firestore Functions
 async function fetchDocuments(category = 'all', filters = {}) {
-    if (!db || !currentUserId) {
+    // Ensure Firebase is ready and currentUserId is set before attempting Firestore operations
+    if (!isFirebaseReady || !currentUserId) {
         console.warn("Firestore not ready or user not authenticated. Returning no data.");
-        // Return empty array if Firebase not initialized
         return [];
     }
 
-    // All user data is stored under their specific user ID
-    const documentsRef = window.firebase.collection(db, `artifacts/${appId}/users/${currentUserId}/documents`);
+    // Fetch from the PUBLIC documents collection for all search views
+    const documentsRef = window.firebase.collection(db, `artifacts/${appId}/public/documents`);
     let q = window.firebase.query(documentsRef);
 
     // Apply category filter if not 'all' or 'advanced-search' (advanced handles its own type filtering)
@@ -1017,7 +976,8 @@ async function setupAdminPanel() {
         }
 
         try {
-            const documentsCollection = window.firebase.collection(db, `artifacts/${appId}/users/${currentUserId}/documents`);
+            // Store documents in the PUBLIC collection
+            const documentsCollection = window.firebase.collection(db, `artifacts/${appId}/public/documents`);
             if (docId) {
                 // Update existing document
                 const docRef = window.firebase.doc(documentsCollection, docId);
@@ -1059,20 +1019,36 @@ async function setupAdminPanel() {
     });
 
 
-    // Real-time listener for documents
-    const documentsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/users/${currentUserId}/documents`);
-    window.firebase.onSnapshot(documentsCollectionRef, (snapshot) => {
-        const documents = [];
-        snapshot.forEach(doc => {
-            documents.push({ id: doc.id, ...doc.data() });
-        });
-        displayAdminDocuments(documents);
-    }, (error) => {
-        console.error("Error listening to documents:", error);
-        adminDocumentListDiv.innerHTML = `<p class="text-red-400">Error loading documents: ${error.message}</p>`;
-    });
+    // Real-time listener for documents in the PUBLIC collection
+    let adminSnapshotUnsubscribe = null; // To store the unsubscribe function
+
+    function setupAdminDocumentListener() {
+        // Unsubscribe from previous listener if it exists
+        if (adminSnapshotUnsubscribe) {
+            adminSnapshotUnsubscribe();
+            adminSnapshotUnsubscribe = null;
+        }
+
+        if (isFirebaseReady && auth.currentUser && !auth.currentUser.isAnonymous) {
+            // Listen to the PUBLIC collection for admin view
+            const documentsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/public/documents`);
+            adminSnapshotUnsubscribe = window.firebase.onSnapshot(documentsCollectionRef, (snapshot) => {
+                const documents = [];
+                snapshot.forEach(doc => {
+                    documents.push({ id: doc.id, ...doc.data() });
+                });
+                displayAdminDocuments(documents);
+            }, (error) => {
+                console.error("Error listening to documents:", error);
+                document.getElementById('admin-document-list').innerHTML = `<p class="text-red-400">Error loading documents: ${error.message}</p>`;
+            });
+        } else {
+            document.getElementById('admin-document-list').innerHTML = '<p class="text-gray-400">Please log in as an administrator to manage documents.</p>';
+        }
+    }
 
     function displayAdminDocuments(documents) {
+        const adminDocumentListDiv = document.getElementById('admin-document-list');
         if (documents.length === 0) {
             adminDocumentListDiv.innerHTML = '<p class="text-gray-400">No documents added yet.</p>';
             return;
@@ -1095,7 +1071,8 @@ async function setupAdminPanel() {
         document.querySelectorAll('.edit-doc-btn').forEach(button => {
             button.addEventListener('click', async (e) => {
                 const docId = e.target.dataset.id;
-                const docRef = window.firebase.doc(documentsCollectionRef, docId);
+                // Fetch from PUBLIC collection for editing
+                const docRef = window.firebase.doc(window.firebase.collection(db, `artifacts/${appId}/public/documents`), docId);
                 const docSnap = await window.firebase.getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -1117,7 +1094,8 @@ async function setupAdminPanel() {
                 const docId = e.target.dataset.id;
                 if (confirm("Are you sure you want to delete this document?")) { // Using confirm for simplicity in admin panel
                     try {
-                        const docRef = window.firebase.doc(documentsCollectionRef, docId);
+                        // Delete from PUBLIC collection
+                        const docRef = window.firebase.doc(window.firebase.collection(db, `artifacts/${appId}/public/documents`), docId);
                         await window.firebase.deleteDoc(docRef);
                         window.showMessageBox("Document deleted successfully!");
                     } catch (error) {
@@ -1131,18 +1109,58 @@ async function setupAdminPanel() {
 
     // Initial render of dynamic fields (empty)
     renderDynamicFields('');
+    setupAdminDocumentListener(); // Start listening for documents
 }
 
+
+// Authenticate user: This listener updates currentUserId based on auth state.
+// It will try to sign in anonymously if no user is logged in.
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUserId = user.uid;
+        console.log("Authenticated user:", currentUserId);
+    } else {
+        // If no user is logged in (including after logout from admin), sign in anonymously for public access
+        try {
+            await signInAnonymously(auth);
+            currentUserId = auth.currentUser.uid;
+            console.log("Signed in anonymously:", currentUserId);
+        } catch (error) {
+            console.error("Firebase anonymous authentication error:", error);
+            window.showMessageBox("Authentication failed. Please try again.");
+        }
+    }
+    // Set Firebase ready flag
+    isFirebaseReady = true;
+    // Dispatch event for main script to react to auth state changes
+    document.dispatchEvent(new CustomEvent('firebaseAuthReady', { detail: { db, auth, currentUserId, appId } }));
+
+    // After auth state is known, render the initial content
+    // This ensures the page loads correctly on first visit
+    renderContent('federal-laws');
+});
+
+
+// Event listener for when Firebase is ready (dispatched from onAuthStateChanged)
+document.addEventListener('firebaseAuthReady', (e) => {
+    // This event is now primarily for confirmation, as renderContent is called directly in onAuthStateChanged
+    console.log("Firebase Auth Ready event received.", e.detail);
+});
 
 // Event listeners for sidebar links
 document.querySelectorAll('.sidebar-link').forEach(link => {
     link.addEventListener('click', function(e) {
         e.preventDefault();
         const category = this.dataset.category;
-        renderContent(category);
-
-        // Update active link styling
-        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active-link'));
-        this.classList.add('active-link');
+        
+        // Only render content if Firebase is ready and we have a user ID
+        if (isFirebaseReady && currentUserId) {
+            renderContent(category);
+            // Update active link styling
+            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active-link'));
+            this.classList.add('active-link');
+        } else {
+            window.showMessageBox("Please wait, Firebase is still initializing...");
+        }
     });
 });
