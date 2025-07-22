@@ -2,7 +2,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-// import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js"; // Uncomment if you plan to use Firebase Analytics
 
 // Your web app's Firebase configuration (DO NOT CHANGE THIS - IT'S YOUR PROJECT'S UNIQUE CONFIG)
 const firebaseConfig = {
@@ -15,19 +14,82 @@ const firebaseConfig = {
     measurementId: "G-HEHFZZWL1E"
 };
 
-// Use the projectId as the appId for Firestore path, as it's unique to your project
-const appId = firebaseConfig.projectId;
+// Global variables for Firebase instances and user ID
+let firebaseApp;
+let db;
+let auth;
+let currentUserId = null;
+let appId = firebaseConfig.projectId; // Derived from projectId
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-// const analytics = getAnalytics(app); // Uncomment if you plan to use Firebase Analytics
+// Flag to ensure Firebase is fully initialized and auth state is known
+let isFirebaseReady = false;
 
-let currentUserId = null; // To store the authenticated user's ID
-let isFirebaseReady = false; // Flag to ensure Firebase is fully initialized and auth state is known
+// --- Firebase Initialization Function ---
+// This function ensures Firebase is fully set up and authenticated before proceeding.
+async function initializeFirebaseAndAuth() {
+    try {
+        firebaseApp = initializeApp(firebaseConfig);
+        db = getFirestore(firebaseApp);
+        auth = getAuth(firebaseApp);
 
-// Function to show custom message box - Exposed to window
+        // Expose Firebase objects to the global window object for easier access
+        // This is crucial for functions called from HTML (onclick) or after initial load
+        window.firebase = {
+            db,
+            auth,
+            appId,
+            collection,
+            addDoc,
+            getDocs,
+            doc,
+            getDoc,
+            updateDoc,
+            deleteDoc,
+            onSnapshot,
+            query,
+            where,
+            signInWithEmailAndPassword: signInWithEmailAndPassword, // Explicitly expose auth functions
+            signOut: signOut,
+            signInAnonymously: signInAnonymously
+        };
+
+        // Return a promise that resolves once the initial auth state is known
+        return new Promise(resolve => {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    console.log("Authenticated user:", currentUserId);
+                } else {
+                    // If no user is logged in (including after logout from admin), sign in anonymously for public access
+                    try {
+                        await signInAnonymously(auth);
+                        currentUserId = auth.currentUser.uid;
+                        console.log("Signed in anonymously:", currentUserId);
+                    } catch (error) {
+                        console.error("Firebase anonymous authentication error:", error);
+                        window.showMessageBox("Authentication failed. Please try again.");
+                        // In case of anonymous sign-in failure, currentUserId might remain null or be a temporary random ID
+                        // For public read, we just need *some* auth object, even if it's failed anonymous.
+                        // The Firestore rules will then deny if request.auth is null.
+                        currentUserId = null; // Ensure it's null if anonymous sign-in fails
+                    }
+                }
+                isFirebaseReady = true; // Set flag once auth state is determined
+                resolve({ db, auth, currentUserId, appId }); // Resolve the promise
+            });
+        });
+
+    } catch (error) {
+        console.error("Error initializing Firebase:", error);
+        window.showMessageBox("Failed to initialize the application. Please check console for details.");
+        isFirebaseReady = false;
+        return null; // Return null if initialization fails
+    }
+}
+
+
+// --- Global Utility Functions (unchanged) ---
+
 window.showMessageBox = function(message) {
     const msgBox = document.getElementById('message-box');
     const msgText = document.getElementById('message-text');
@@ -35,10 +97,9 @@ window.showMessageBox = function(message) {
     msgBox.classList.remove('hidden');
     setTimeout(() => {
         msgBox.classList.add('hidden');
-    }, 3000); // Hide after 3 seconds
+    }, 3000);
 }
 
-// Document Detail Modal Functions - Exposed to window
 const detailModal = document.getElementById('document-detail-modal');
 const detailTitle = document.getElementById('detail-title');
 const detailContent = document.getElementById('detail-content');
@@ -90,14 +151,13 @@ window.showDocumentDetail = function(documentData) {
     }
     detailContent.innerHTML = contentHtml;
     viewDocumentExternalButton.onclick = () => window.showMessageBox(`Opening external document for: ${documentData.title}`);
-    detailModal.style.display = 'flex'; // Show the modal
+    detailModal.style.display = 'flex';
 }
 
 window.hideDocumentDetail = function() {
-    detailModal.style.display = 'none'; // Hide the modal
+    detailModal.style.display = 'none';
 }
 
-// Sidebar Toggle for Mobile
 const menuToggle = document.getElementById('menu-toggle');
 const sidebar = document.getElementById('sidebar');
 
@@ -117,7 +177,6 @@ menuToggle.addEventListener('click', () => {
     }
 });
 
-// Close sidebar when a link is clicked on mobile
 document.querySelectorAll('.sidebar-link').forEach(link => {
     link.addEventListener('click', () => {
         if (window.innerWidth < 1024) {
@@ -128,7 +187,8 @@ document.querySelectorAll('.sidebar-link').forEach(link => {
 });
 
 
-// Function to render content based on category
+// --- Core Content Rendering and Data Fetching Logic ---
+
 async function renderContent(category) {
     const mainContentDiv = document.getElementById('main-content');
     const breadcrumbCategory = document.getElementById('breadcrumb-category');
@@ -563,99 +623,106 @@ async function renderContent(category) {
     // Attach event listeners for search and clear buttons
     // Only attach if Firebase is ready and currentUserId is available
     // For public search, we don't need currentUserId to be non-anonymous, just authenticated.
-    if (isFirebaseReady && currentUserId && category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
-        const searchButton = document.getElementById(`search-${category.replace('-', '')}`);
-        const clearButton = document.getElementById(`clear-${category.replace('-', '')}`);
-        const resultsDiv = document.getElementById(`${category}-results`);
+    if (isFirebaseReady) { // Check only for isFirebaseReady, as currentUserId will be set by anonymous auth
+        if (category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
+            const searchButton = document.getElementById(`search-${category.replace('-', '')}`);
+            const clearButton = document.getElementById(`clear-${category.replace('-', '')}`);
+            const resultsDiv = document.getElementById(`${category}-results`);
 
-        if (searchButton) {
-            searchButton.addEventListener('click', async () => {
-                resultsDiv.innerHTML = '<p class="text-gray-400">Searching...</p>';
-                const filters = {};
-                if (category === 'federal-laws') {
-                    filters.codeTitle = document.getElementById('law-title-filter').value;
-                    filters.status = document.getElementById('law-status-filter').value;
-                    filters.yearFrom = document.getElementById('law-year-from').value;
-                    filters.yearTo = document.getElementById('law-year-to').value;
-                    filters.keywords = document.getElementById('law-keywords-filter').value;
-                    filters.sponsor = document.getElementById('law-sponsor-filter').value;
-                } else if (category === 'executive-documents') {
-                    filters.issuingAuthority = document.getElementById('executive-authority-filter').value;
-                    filters.documentType = document.getElementById('executive-type-filter').value;
-                    filters.yearFrom = document.getElementById('executive-year-from').value;
-                    filters.yearTo = document.getElementById('executive-year-to').value;
-                    filters.keywords = document.getElementById('executive-keywords-filter').value;
-                } else if (category === 'judicial-documents') {
-                    filters.court = document.getElementById('judicial-court-filter').value;
-                    filters.judgeProsecutor = document.getElementById('judicial-judge-filter').value;
-                    filters.caseType = document.getElementById('judicial-case-type-filter').value;
-                    filters.yearFrom = document.getElementById('judicial-year-from').value;
-                    filters.yearTo = document.getElementById('judicial-year-to').value;
-                    filters.keywords = document.getElementById('judicial-keywords-filter').value;
-                } else if (category === 'treaties-resolutions') {
-                    filters.documentType = document.getElementById('treaty-type-filter').value;
-                    filters.status = document.getElementById('treaty-status-filter').value;
-                    filters.yearFrom = document.getElementById('treaty-year-from').value;
-                    filters.yearTo = document.getElementById('treaty-year-to').value;
-                    filters.partiesInvolved = document.getElementById('treaty-parties-filter').value;
-                    filters.titleNumber = document.getElementById('treaty-title-number-filter').value;
-                    filters.keywords = document.getElementById('treaty-keywords-filter').value;
-                } else if (category === 'advanced-search') {
-                    filters.documentCategories = Array.from(document.querySelectorAll('input[name="doc-type"]:checked')).map(cb => cb.value);
-                    filters.keywords = document.getElementById('advanced-keywords-filter').value;
-                    filters.yearFrom = document.getElementById('advanced-year-from').value;
-                    filters.yearTo = document.getElementById('advanced-year-to').value;
-                }
-
-                const filteredDocs = await fetchDocuments(category, filters);
-                resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
-                attachDocumentCardListeners(); // Re-attach listeners after new content
-            });
-        }
-        if (clearButton) {
-            clearButton.addEventListener('click', () => {
-                // Reset all input fields for the current category
-                const formElements = mainContentDiv.querySelectorAll('input, select, textarea');
-                formElements.forEach(el => {
-                    if (el.type === 'checkbox' || el.type === 'radio') {
-                        el.checked = false;
-                    } else {
-                        el.value = '';
+            if (searchButton) {
+                searchButton.addEventListener('click', async () => {
+                    resultsDiv.innerHTML = '<p class="text-gray-400">Searching...</p>';
+                    const filters = {};
+                    if (category === 'federal-laws') {
+                        filters.codeTitle = document.getElementById('law-title-filter').value;
+                        filters.status = document.getElementById('law-status-filter').value;
+                        filters.yearFrom = document.getElementById('law-year-from').value;
+                        filters.yearTo = document.getElementById('law-year-to').value;
+                        filters.keywords = document.getElementById('law-keywords-filter').value;
+                        filters.sponsor = document.getElementById('law-sponsor-filter').value;
+                    } else if (category === 'executive-documents') {
+                        filters.issuingAuthority = document.getElementById('executive-authority-filter').value;
+                        filters.documentType = document.getElementById('executive-type-filter').value;
+                        filters.yearFrom = document.getElementById('executive-year-from').value;
+                        filters.yearTo = document.getElementById('executive-year-to').value;
+                        filters.keywords = document.getElementById('executive-keywords-filter').value;
+                    } else if (category === 'judicial-documents') {
+                        filters.court = document.getElementById('judicial-court-filter').value;
+                        filters.judgeProsecutor = document.getElementById('judicial-judge-filter').value;
+                        filters.caseType = document.getElementById('judicial-case-type-filter').value;
+                        filters.yearFrom = document.getElementById('judicial-year-from').value;
+                        filters.yearTo = document.getElementById('judicial-year-to').value;
+                        filters.keywords = document.getElementById('judicial-keywords-filter').value;
+                    } else if (category === 'treaties-resolutions') {
+                        filters.documentType = document.getElementById('treaty-type-filter').value;
+                        filters.status = document.getElementById('treaty-status-filter').value;
+                        filters.yearFrom = document.getElementById('treaty-year-from').value;
+                        filters.yearTo = document.getElementById('treaty-year-to').value;
+                        filters.partiesInvolved = document.getElementById('treaty-parties-filter').value;
+                        filters.titleNumber = document.getElementById('treaty-title-number-filter').value;
+                        filters.keywords = document.getElementById('treaty-keywords-filter').value;
+                    } else if (category === 'advanced-search') {
+                        filters.documentCategories = Array.from(document.querySelectorAll('input[name="doc-type"]:checked')).map(cb => cb.value);
+                        filters.keywords = document.getElementById('advanced-keywords-filter').value;
+                        filters.yearFrom = document.getElementById('advanced-year-from').value;
+                        filters.yearTo = document.getElementById('advanced-year-to').value;
                     }
-                });
-                resultsDiv.innerHTML = '<p class="text-gray-400">Filters cleared. Perform a new search.</p>';
-            });
-        }
-        // Initial load of documents for search pages
-        const initialDocs = await fetchDocuments(category);
-        resultsDiv.innerHTML = generateSearchResultsHtml(initialDocs);
-        attachDocumentCardListeners();
-    } else if (category === 'admin-panel') { // Admin panel logic
-        if (isFirebaseReady && auth.currentUser && !auth.currentUser.isAnonymous) {
-            setupAdminPanel();
-        } else {
-            // Attach login form listener if it's the admin login page
-            const loginForm = document.getElementById('admin-login-form');
-            if (loginForm) {
-                loginForm.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const email = document.getElementById('admin-email').value;
-                    const password = document.getElementById('admin-password').value;
-                    const errorMessageDiv = document.getElementById('login-error-message');
-                    errorMessageDiv.classList.add('hidden'); // Hide previous errors
 
-                    try {
-                        await window.firebase.signInWithEmailAndPassword(auth, email, password);
-                        window.showMessageBox("Logged in successfully!");
-                        // After successful login, onAuthStateChanged will trigger renderContent('admin-panel')
-                    } catch (error) {
-                        console.error("Login error:", error);
-                        errorMessageDiv.textContent = `Login failed: ${error.message}`;
-                        errorMessageDiv.classList.remove('hidden');
-                    }
+                    const filteredDocs = await fetchDocuments(category, filters);
+                    resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
+                    attachDocumentCardListeners(); // Re-attach listeners after new content
                 });
             }
+            if (clearButton) {
+                clearButton.addEventListener('click', () => {
+                    // Reset all input fields for the current category
+                    const formElements = mainContentDiv.querySelectorAll('input, select, textarea');
+                    formElements.forEach(el => {
+                        if (el.type === 'checkbox' || el.type === 'radio') {
+                            el.checked = false;
+                        } else {
+                            el.value = '';
+                        }
+                    });
+                    resultsDiv.innerHTML = '<p class="text-gray-400">Filters cleared. Perform a new search.</p>';
+                });
+            }
+            // Initial load of documents for search pages
+            const initialDocs = await fetchDocuments(category);
+            resultsDiv.innerHTML = generateSearchResultsHtml(initialDocs);
+            attachDocumentCardListeners();
+        } else if (category === 'admin-panel') { // Admin panel logic
+            if (auth.currentUser && !auth.currentUser.isAnonymous) {
+                setupAdminPanel();
+            } else {
+                // Attach login form listener if it's the admin login page
+                const loginForm = document.getElementById('admin-login-form');
+                if (loginForm) {
+                    loginForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const email = document.getElementById('admin-email').value;
+                        const password = document.getElementById('admin-password').value;
+                        const errorMessageDiv = document.getElementById('login-error-message');
+                        errorMessageDiv.classList.add('hidden'); // Hide previous errors
+
+                        try {
+                            // Use window.firebase.signInWithEmailAndPassword
+                            await window.firebase.signInWithEmailAndPassword(auth, email, password);
+                            window.showMessageBox("Logged in successfully!");
+                            // After successful login, onAuthStateChanged will trigger renderContent('admin-panel')
+                        } catch (error) {
+                            console.error("Login error:", error);
+                            errorMessageDiv.textContent = `Login failed: ${error.message}`;
+                            errorMessageDiv.classList.remove('hidden');
+                        }
+                    });
+                }
+            }
         }
+    } else {
+        // If Firebase is not ready, display a loading message or retry mechanism
+        mainContentDiv.innerHTML = '<p class="text-gray-400">Initializing application, please wait...</p>';
+        breadcrumbCategory.textContent = 'Loading...';
     }
 }
 
@@ -664,7 +731,7 @@ function attachDocumentCardListeners() {
     document.querySelectorAll('.document-card').forEach(card => {
         card.addEventListener('click', async function() {
             const docId = this.dataset.docId;
-            if (docId && db && currentUserId) {
+            if (docId && db) { // Check for db, currentUserId is handled by public rule
                 try {
                     // Fetch from the PUBLIC collection
                     const docRef = window.firebase.doc(db, `artifacts/${appId}/public/documents`, docId);
@@ -679,7 +746,7 @@ function attachDocumentCardListeners() {
                     window.showMessageBox("Error loading document details.");
                 }
             } else {
-                window.showMessageBox("Cannot retrieve document details without an active database connection or valid document ID.");
+                window.showMessageBox("Cannot retrieve document details without an active database connection.");
             }
         });
     });
@@ -687,9 +754,9 @@ function attachDocumentCardListeners() {
 
 // Firestore Functions
 async function fetchDocuments(category = 'all', filters = {}) {
-    // Ensure Firebase is ready and currentUserId is set before attempting Firestore operations
-    if (!isFirebaseReady || !currentUserId) {
-        console.warn("Firestore not ready or user not authenticated. Returning no data.");
+    // Ensure Firebase is ready before attempting Firestore operations
+    if (!isFirebaseReady || !db) {
+        console.warn("Firestore not ready. Returning no data.");
         return [];
     }
 
@@ -711,11 +778,6 @@ async function fetchDocuments(category = 'all', filters = {}) {
         }
     }
 
-
-    // Apply other filters (simplified for now)
-    // Note: Firestore queries are complex with multiple 'where' clauses.
-    // For robust filtering, consider combining filters carefully or using a search service.
-    // For this demo, we'll primarily rely on client-side filtering for keywords/years if not directly supported by Firestore query.
     try {
         const querySnapshot = await window.firebase.getDocs(q);
         let documents = [];
@@ -782,7 +844,8 @@ async function fetchDocuments(category = 'all', filters = {}) {
 
 // Admin Panel Functions
 async function setupAdminPanel() {
-    if (!db || !currentUserId || auth.currentUser.isAnonymous) {
+    // Ensure Firebase is ready and an authenticated (non-anonymous) user is present
+    if (!isFirebaseReady || !auth.currentUser || auth.currentUser.isAnonymous) {
         document.getElementById('admin-document-list').innerHTML = '<p class="text-red-400">Authentication required to access admin features. Please log in.</p>';
         return;
     }
@@ -1009,7 +1072,7 @@ async function setupAdminPanel() {
     // Admin Logout button
     adminLogoutButton.addEventListener('click', async () => {
         try {
-            await window.firebase.signOut(auth);
+            await window.firebase.signOut(auth); // Use the globally available auth object
             window.showMessageBox("Logged out successfully!");
             renderContent('admin-panel'); // Go back to login screen
         } catch (error) {
@@ -1113,54 +1176,29 @@ async function setupAdminPanel() {
 }
 
 
-// Authenticate user: This listener updates currentUserId based on auth state.
-// It will try to sign in anonymously if no user is logged in.
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        currentUserId = user.uid;
-        console.log("Authenticated user:", currentUserId);
+// --- Main Application Entry Point ---
+// This ensures Firebase is ready before any content is rendered.
+document.addEventListener('DOMContentLoaded', async () => {
+    const firebaseReadyData = await initializeFirebaseAndAuth();
+    if (firebaseReadyData) {
+        // Firebase is ready, render the initial content (Federal Laws)
+        renderContent('federal-laws');
+
+        // Attach event listeners for sidebar links
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const category = this.dataset.category;
+                // Since initializeFirebaseAndAuth is awaited, isFirebaseReady will be true here
+                renderContent(category);
+                // Update active link styling
+                document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active-link'));
+                this.classList.add('active-link');
+            });
+        });
     } else {
-        // If no user is logged in (including after logout from admin), sign in anonymously for public access
-        try {
-            await signInAnonymously(auth);
-            currentUserId = auth.currentUser.uid;
-            console.log("Signed in anonymously:", currentUserId);
-        } catch (error) {
-            console.error("Firebase anonymous authentication error:", error);
-            window.showMessageBox("Authentication failed. Please try again.");
-        }
+        document.getElementById('main-content').innerHTML = '<p class="text-red-400">Failed to load the application. Please check your internet connection and browser console.</p>';
+        document.getElementById('breadcrumb-category').textContent = 'Error';
     }
-    // Set Firebase ready flag
-    isFirebaseReady = true;
-    // Dispatch event for main script to react to auth state changes
-    document.dispatchEvent(new CustomEvent('firebaseAuthReady', { detail: { db, auth, currentUserId, appId } }));
-
-    // After auth state is known, render the initial content
-    // This ensures the page loads correctly on first visit
-    renderContent('federal-laws');
 });
 
-
-// Event listener for when Firebase is ready (dispatched from onAuthStateChanged)
-document.addEventListener('firebaseAuthReady', (e) => {
-    // This event is now primarily for confirmation, as renderContent is called directly in onAuthStateChanged
-    console.log("Firebase Auth Ready event received.", e.detail);
-});
-
-// Event listeners for sidebar links
-document.querySelectorAll('.sidebar-link').forEach(link => {
-    link.addEventListener('click', function(e) {
-        e.preventDefault();
-        const category = this.dataset.category;
-        
-        // Only render content if Firebase is ready and we have a user ID
-        if (isFirebaseReady && currentUserId) {
-            renderContent(category);
-            // Update active link styling
-            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active-link'));
-            this.classList.add('active-link');
-        } else {
-            window.showMessageBox("Please wait, Firebase is still initializing...");
-        }
-    });
-});
