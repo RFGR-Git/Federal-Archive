@@ -24,6 +24,18 @@ let appId = firebaseConfig.projectId; // Derived from projectId
 // Flag to ensure Firebase is fully initialized and auth state is known
 let isFirebaseReady = false;
 
+// Define the 8 Code Titles for Federal Laws
+const federalLawTitles = [
+    "Title 1: Constitution & Founding Acts",
+    "Title 2: Criminal Law",
+    "Title 3: Civil & Commercial Law",
+    "Title 4: Labour Law",
+    "Title 5: Taxation",
+    "Title 6: National Security",
+    "Title 7: Health & Education",
+    "Title 8: Public Order & Internal Affairs"
+];
+
 // --- Firebase Initialization Function ---
 // This function ensures Firebase is fully set up and authenticated before proceeding.
 async function initializeFirebaseAndAuth() {
@@ -33,7 +45,6 @@ async function initializeFirebaseAndAuth() {
         auth = getAuth(firebaseApp);
 
         // Expose Firebase objects to the global window object for easier access
-        // This is crucial for functions called from HTML (onclick) or after initial load
         window.firebase = {
             db,
             auth,
@@ -48,7 +59,7 @@ async function initializeFirebaseAndAuth() {
             onSnapshot,
             query,
             where,
-            signInWithEmailAndPassword: signInWithEmailAndPassword, // Explicitly expose auth functions
+            signInWithEmailAndPassword: signInWithEmailAndPassword,
             signOut: signOut,
             signInAnonymously: signInAnonymously
         };
@@ -60,18 +71,15 @@ async function initializeFirebaseAndAuth() {
                     currentUserId = user.uid;
                     console.log("Authenticated user:", currentUserId);
                 } else {
-                    // If no user is logged in (including after logout from admin), sign in anonymously for public access
+                    // Try to sign in anonymously for public access
                     try {
                         await signInAnonymously(auth);
                         currentUserId = auth.currentUser.uid;
                         console.log("Signed in anonymously:", currentUserId);
                     } catch (error) {
                         console.error("Firebase anonymous authentication error:", error);
-                        window.showMessageBox("Authentication failed. Please try again.");
-                        // In case of anonymous sign-in failure, currentUserId might remain null or be a temporary random ID
-                        // For public read, we just need *some* auth object, even if it's failed anonymous.
-                        // The Firestore rules will then deny if request.auth is null.
-                        currentUserId = null; // Ensure it's null if anonymous sign-in fails
+                        // Do NOT show messageBox here, as it might appear even if public access is okay
+                        currentUserId = null; // Ensure it's null if anonymous sign-in truly fails
                     }
                 }
                 isFirebaseReady = true; // Set flag once auth state is determined
@@ -83,12 +91,12 @@ async function initializeFirebaseAndAuth() {
         console.error("Error initializing Firebase:", error);
         window.showMessageBox("Failed to initialize the application. Please check console for details.");
         isFirebaseReady = false;
-        return null; // Return null if initialization fails
+        return null;
     }
 }
 
 
-// --- Global Utility Functions (unchanged) ---
+// --- Global Utility Functions ---
 
 window.showMessageBox = function(message) {
     const msgBox = document.getElementById('message-box');
@@ -116,6 +124,7 @@ window.showDocumentDetail = function(documentData) {
                 <p><strong>Issuing Authority:</strong> ${documentData.issuingAuthority}</p>
                 <p><strong>Status:</strong> ${documentData.status}</p>
                 <p><strong>Code Title:</strong> ${documentData.codeTitle}</p>
+                <p><strong>Sponsor:</strong> ${documentData.sponsor || 'N/A'}</p>
                 <p><strong>Summary:</strong> ${documentData.summary}</p>
                 <p><strong>Tags:</strong> ${documentData.tags}</p>
             `;
@@ -135,6 +144,8 @@ window.showDocumentDetail = function(documentData) {
                 <p><strong>Date Issued:</strong> ${documentData.dateIssued}</p>
                 <p><strong>Judge / Prosecutor:</strong> ${documentData.judgeProsecutor}</p>
                 <p><strong>Case Type:</strong> ${documentData.caseType}</p>
+                <p><strong>Plaintiff:</strong> ${documentData.plaintiff || 'N/A'}</p>
+                <p><strong>Defendant:</strong> ${documentData.defendant || 'N/A'}</p>
                 <p><strong>Summary:</strong> ${documentData.summary}</p>
                 <p><strong>Status:</strong> ${documentData.status}</p>
             `;
@@ -150,7 +161,14 @@ window.showDocumentDetail = function(documentData) {
             break;
     }
     detailContent.innerHTML = contentHtml;
-    viewDocumentExternalButton.onclick = () => window.showMessageBox(`Opening external document for: ${documentData.title}`);
+    // Use the externalUrl if available, otherwise show a generic message
+    if (documentData.externalUrl && documentData.externalUrl.startsWith('http')) {
+        viewDocumentExternalButton.classList.remove('hidden');
+        viewDocumentExternalButton.onclick = () => window.open(documentData.externalUrl, '_blank');
+    } else {
+        viewDocumentExternalButton.classList.add('hidden');
+        viewDocumentExternalButton.onclick = () => window.showMessageBox(`No external URL provided for: ${documentData.title}`);
+    }
     detailModal.style.display = 'flex';
 }
 
@@ -220,6 +238,46 @@ async function renderContent(category) {
     }
 
     switch (category) {
+        case 'home': // Renamed from advanced-search
+            breadcrumbText = 'Home';
+            contentHtml = `
+                <h2 class="text-3xl font-bold mb-6 text-blue-400">Welcome to the Federal Legal & Government Document Archive</h2>
+                <p class="text-lg text-gray-300 mb-8">Your comprehensive portal for official Russian legal and government documents.</p>
+                <p class="text-gray-300 mb-4">Use the sidebar navigation to explore different categories of documents:</p>
+                <ul class="list-disc list-inside space-y-2 text-gray-300">
+                    <li><strong>Federal Laws:</strong> Search all codified laws (Titles 1–8).</li>
+                    <li><strong>Executive Documents:</strong> Find Presidential orders, ministerial decrees, etc.</li>
+                    <li><strong>Judicial Documents:</strong> Access court rulings, opinions, and prosecutorial guidelines.</li>
+                    <li><strong>Treaties & Resolutions:</strong> Browse ratified treaties and legislative resolutions.</li>
+                    <li><strong>Advanced Search:</strong> Perform combined searches across all categories.</li>
+                </ul>
+                <p class="mt-6 text-gray-300">Begin your search by selecting a category from the left sidebar.</p>
+
+                <h3 class="text-2xl font-bold mt-10 mb-4 text-blue-300">Quick Search Across All Documents</h3>
+                <div class="grid grid-cols-1 gap-6 mb-8">
+                    <div>
+                        <label for="home-keywords-filter" class="block text-sm font-medium text-gray-300 mb-1">Keywords / Full Text</label>
+                        <input type="text" id="home-keywords-filter" placeholder="Global keyword search" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="home-year-from" class="block text-sm font-medium text-gray-300 mb-1">Date Range (From)</label>
+                        <input type="number" id="home-year-from" placeholder="YYYY" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="home-year-to" class="block text-sm font-medium text-gray-300 mb-1">Year Range (To)</label>
+                        <input type="number" id="home-year-to" placeholder="YYYY" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <button id="perform-home-search" class="flex-1 py-3 px-6 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200">Perform Search</button>
+                    <button id="clear-home-search" class="flex-1 py-3 px-6 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200">Clear Filters</button>
+                </div>
+                <div class="mt-10">
+                    <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
+                    <div id="home-search-results"></div> <!-- Changed to empty -->
+                </div>
+            `;
+            break;
         case 'federal-laws':
             breadcrumbText = 'Federal Laws';
             contentHtml = `
@@ -229,23 +287,16 @@ async function renderContent(category) {
                         <label for="law-title-filter" class="block text-sm font-medium text-gray-300 mb-1">Code Title</label>
                         <select id="law-title-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <option value="">Select Title</option>
-                            <option value="title1">Title 1</option>
-                            <option value="title2">Title 2 - Criminal Law</option>
-                            <option value="title3">Title 3</option>
-                            <option value="title4">Title 4</option>
-                            <option value="title5">Title 5</option>
-                            <option value="title6">Title 6</option>
-                            <option value="title7">Title 7</option>
-                            <option value="title8">Title 8</option>
+                            ${federalLawTitles.map(title => `<option value="${title}">${title}</option>`).join('')}
                         </select>
                     </div>
                     <div>
                         <label for="law-status-filter" class="block text-sm font-medium text-gray-300 mb-1">Status</label>
                         <select id="law-status-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <option value="">Select Status</option>
-                            <option value="active">Active</option>
-                            <option value="repealed">Repealed</option>
-                            <option value="pending">Pending</option>
+                            <option value="Active">Active</option>
+                            <option value="Repealed">Repealed</option>
+                            <option value="Pending">Pending</option>
                         </select>
                     </div>
                     <div>
@@ -272,7 +323,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="federal-laws-results">Loading results...</div>
+                    <div id="federal-laws-results"></div> <!-- Changed to empty -->
                 </div>
             `;
             break;
@@ -283,22 +334,11 @@ async function renderContent(category) {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div>
                         <label for="executive-authority-filter" class="block text-sm font-medium text-gray-300 mb-1">Issuing Authority</label>
-                        <select id="executive-authority-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Select Authority</option>
-                            <option value="president">President</option>
-                            <option value="justice-ministry">Ministry of Justice</option>
-                            <option value="finance-ministry">Ministry of Finance</option>
-                            <option value="digital-development-ministry">Ministry of Digital Development</option>
-                        </select>
+                        <input type="text" id="executive-authority-filter" placeholder="e.g., President, Ministry of Justice" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
                         <label for="executive-type-filter" class="block text-sm font-medium text-gray-300 mb-1">Document Type</label>
-                        <select id="executive-type-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Select Type</option>
-                            <option value="order">Order</option>
-                            <option value="decree">Decree</option>
-                            <option value="instruction">Instruction</option>
-                        </select>
+                        <input type="text" id="executive-type-filter" placeholder="e.g., Order, Decree" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
                         <label for="executive-year-from" class="block text-sm font-medium text-gray-300 mb-1">Year Range (From)</label>
@@ -320,7 +360,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="executive-documents-results">Loading results...</div>
+                    <div id="executive-documents-results"></div> <!-- Changed to empty -->
                 </div>
             `;
             break;
@@ -371,7 +411,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="judicial-documents-results">Loading results...</div>
+                    <div id="judicial-documents-results"></div> <!-- Changed to empty -->
                 </div>
             `;
             break;
@@ -425,12 +465,11 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="treaties-resolutions-results">Loading results...</div>
+                    <div id="treaties-resolutions-results"></div> <!-- Changed to empty -->
                 </div>
             `;
             break;
         case 'admin-panel':
-            // Check if authenticated AND NOT anonymous. If not, show login form.
             if (!auth.currentUser || auth.currentUser.isAnonymous) {
                 breadcrumbText = 'Admin Login';
                 contentHtml = `
@@ -451,7 +490,6 @@ async function renderContent(category) {
                     </div>
                 `;
             } else {
-                // If authenticated with a non-anonymous user, show the admin panel content
                 breadcrumbText = 'Admin Panel';
                 contentHtml = `
                     <h2 class="text-3xl font-bold mb-6 text-blue-400">Admin Panel</h2>
@@ -481,6 +519,10 @@ async function renderContent(category) {
                             <div class="md:col-span-2">
                                 <label for="doc-summary" class="block text-sm font-medium text-gray-300 mb-1">Summary</label>
                                 <textarea id="doc-summary" placeholder="Brief summary of the document" rows="3" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" required></textarea>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="doc-external-url" class="block text-sm font-medium text-gray-300 mb-1">External URL (Optional)</label>
+                                <input type="url" id="doc-external-url" placeholder="e.g., https://example.com/document.pdf" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm">
                             </div>
                             <div class="md:col-span-2 flex flex-col sm:flex-row gap-4">
                                 <button type="submit" class="flex-1 py-3 px-6 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-green-700 transition-colors duration-200">Save Document</button>
@@ -550,30 +592,45 @@ async function renderContent(category) {
                 </div>
             `;
             break;
-        default:
-            breadcrumbText = 'Home';
-            contentHtml = `
-                <h2 class="text-3xl font-bold mb-6 text-blue-400">Welcome to the Federal Legal & Government Document Archive</h2>
-                <p class="text-lg text-gray-300 mb-8">Your comprehensive portal for official Russian legal and government documents.</p>
-                <p class="text-gray-300 mb-4">Use the sidebar navigation to explore different categories of documents:</p>
-                <ul class="list-disc list-inside space-y-2 text-gray-300">
-                    <li><strong>Federal Laws:</strong> Search all codified laws (Titles 1–8).</li>
-                    <li><strong>Executive Documents:</strong> Find Presidential orders, ministerial decrees, etc.</li>
-                    <li><strong>Judicial Documents:</strong> Access court rulings, opinions, and prosecutorial guidelines.</li>
-                    <li><strong>Treaties & Resolutions:</strong> Browse ratified treaties and legislative resolutions.</li>
-                    <li><strong>Advanced Search:</strong> Perform combined searches across all categories.</li>
-                </ul>
-                <p class="mt-6 text-gray-300">Begin your search by selecting a category from the left sidebar.</p>
-            `;
+        default: // Fallback to home if category is unknown
+            renderContent('home');
+            return;
     }
     mainContentDiv.innerHTML = contentHtml;
     breadcrumbCategory.textContent = breadcrumbText;
 
     // Attach event listeners for search and clear buttons
-    // Only attach if Firebase is ready and currentUserId is available
-    // For public search, we don't need currentUserId to be non-anonymous, just authenticated.
-    if (isFirebaseReady) { // Check only for isFirebaseReady, as currentUserId will be set by anonymous auth
-        if (category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
+    if (isFirebaseReady) {
+        if (category === 'home') { // Special handling for the new home page search
+            const searchButton = document.getElementById('perform-home-search');
+            const clearButton = document.getElementById('clear-home-search');
+            const resultsDiv = document.getElementById('home-search-results');
+
+            if (searchButton) {
+                searchButton.addEventListener('click', async () => {
+                    resultsDiv.innerHTML = '<p class="text-gray-400">Searching...</p>';
+                    const filters = {
+                        keywords: document.getElementById('home-keywords-filter').value,
+                        yearFrom: document.getElementById('home-year-from').value,
+                        yearTo: document.getElementById('home-year-to').value,
+                        // No documentCategories filter for home page quick search
+                    };
+                    const filteredDocs = await fetchDocuments('all', filters); // Fetch all types
+                    resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
+                    attachDocumentCardListeners();
+                });
+            }
+            if (clearButton) {
+                clearButton.addEventListener('click', () => {
+                    document.getElementById('home-keywords-filter').value = '';
+                    document.getElementById('home-year-from').value = '';
+                    document.getElementById('home-year-to').value = '';
+                    resultsDiv.innerHTML = ''; // Clear results
+                });
+            }
+            // No initial fetch for home page quick search, results only appear after search button click
+        }
+        else if (category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
             const searchButton = document.getElementById(`search-${category.replace('-', '')}`);
             const clearButton = document.getElementById(`clear-${category.replace('-', '')}`);
             const resultsDiv = document.getElementById(`${category}-results`);
@@ -610,21 +667,15 @@ async function renderContent(category) {
                         filters.partiesInvolved = document.getElementById('treaty-parties-filter').value;
                         filters.titleNumber = document.getElementById('treaty-title-number-filter').value;
                         filters.keywords = document.getElementById('treaty-keywords-filter').value;
-                    } else if (category === 'advanced-search') {
-                        filters.documentCategories = Array.from(document.querySelectorAll('input[name="doc-type"]:checked')).map(cb => cb.value);
-                        filters.keywords = document.getElementById('advanced-keywords-filter').value;
-                        filters.yearFrom = document.getElementById('advanced-year-from').value;
-                        filters.yearTo = document.getElementById('advanced-year-to').value;
                     }
 
                     const filteredDocs = await fetchDocuments(category, filters);
                     resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
-                    attachDocumentCardListeners(); // Re-attach listeners after new content
+                    attachDocumentCardListeners();
                 });
             }
             if (clearButton) {
                 clearButton.addEventListener('click', () => {
-                    // Reset all input fields for the current category
                     const formElements = mainContentDiv.querySelectorAll('input, select, textarea');
                     formElements.forEach(el => {
                         if (el.type === 'checkbox' || el.type === 'radio') {
@@ -633,18 +684,17 @@ async function renderContent(category) {
                             el.value = '';
                         }
                     });
-                    resultsDiv.innerHTML = '<p class="text-gray-400">Filters cleared. Perform a new search.</p>';
+                    resultsDiv.innerHTML = ''; // Clear results
                 });
             }
-            // Initial load of documents for search pages
+            // Initial load of documents for search pages (except Home)
             const initialDocs = await fetchDocuments(category);
             resultsDiv.innerHTML = generateSearchResultsHtml(initialDocs);
             attachDocumentCardListeners();
-        } else if (category === 'admin-panel') { // Admin panel logic
+        } else if (category === 'admin-panel') {
             if (auth.currentUser && !auth.currentUser.isAnonymous) {
                 setupAdminPanel();
             } else {
-                // Attach login form listener if it's the admin login page
                 const loginForm = document.getElementById('admin-login-form');
                 if (loginForm) {
                     loginForm.addEventListener('submit', async (e) => {
@@ -652,14 +702,12 @@ async function renderContent(category) {
                         const email = document.getElementById('admin-email').value;
                         const password = document.getElementById('admin-password').value;
                         const errorMessageDiv = document.getElementById('login-error-message');
-                        errorMessageDiv.classList.add('hidden'); // Hide previous errors
+                        errorMessageDiv.classList.add('hidden');
 
                         try {
-                            // Use window.firebase.signInWithEmailAndPassword
                             await window.firebase.signInWithEmailAndPassword(auth, email, password);
                             window.showMessageBox("Logged in successfully!");
-                            // IMPORTANT: Re-render the admin panel after successful login
-                            renderContent('admin-panel'); // This will re-evaluate the auth.currentUser check
+                            renderContent('admin-panel'); // Re-render to show admin content
                         } catch (error) {
                             console.error("Login error:", error);
                             errorMessageDiv.textContent = `Login failed: ${error.message}`;
@@ -670,7 +718,6 @@ async function renderContent(category) {
             }
         }
     } else {
-        // If Firebase is not ready, display a loading message or retry mechanism
         mainContentDiv.innerHTML = '<p class="text-gray-400">Initializing application, please wait...</p>';
         breadcrumbCategory.textContent = 'Loading...';
     }
@@ -681,10 +728,10 @@ function attachDocumentCardListeners() {
     document.querySelectorAll('.document-card').forEach(card => {
         card.addEventListener('click', async function() {
             const docId = this.dataset.docId;
-            if (docId && db) { // Check for db, currentUserId is handled by public rule
+            if (docId && db) {
                 try {
                     // Fetch from the PUBLIC collection
-                    const docRef = window.firebase.doc(db, `artifacts/${appId}/public/documents`, docId);
+                    const docRef = window.firebase.doc(db, `public_documents`, docId);
                     const docSnap = await window.firebase.getDoc(docRef);
                     if (docSnap.exists()) {
                         window.showDocumentDetail({ id: docSnap.id, ...docSnap.data() });
@@ -704,28 +751,18 @@ function attachDocumentCardListeners() {
 
 // Firestore Functions
 async function fetchDocuments(category = 'all', filters = {}) {
-    // Ensure Firebase is ready before attempting Firestore operations
     if (!isFirebaseReady || !db) {
         console.warn("Firestore not ready. Returning no data.");
         return [];
     }
 
-    // Fetch from the PUBLIC documents collection for all search views
-    const documentsRef = window.firebase.collection(db, `artifacts/${appId}/public/documents`);
+    // Always fetch from the PUBLIC documents collection
+    const documentsRef = window.firebase.collection(db, `public_documents`);
     let q = window.firebase.query(documentsRef);
 
-    // Apply category filter if not 'all' or 'advanced-search' (advanced handles its own type filtering)
-    if (category !== 'all' && category !== 'admin-panel' && category !== 'advanced-search') {
+    // Apply category filter if not 'all'
+    if (category !== 'all' && category !== 'admin-panel' && category !== 'home') {
         q = window.firebase.query(q, window.firebase.where('type', '==', category.replace('-documents', '-document').replace('-laws', '-law').replace('-resolutions', '-resolution')));
-    } else if (category === 'advanced-search' && filters.documentCategories && filters.documentCategories.length > 0) {
-        // For advanced search, if specific document types are selected, filter by them
-        // Note: Firestore 'in' query is limited to 10 values. For more, separate queries needed.
-        if (filters.documentCategories.length <= 10) {
-             q = window.firebase.query(q, window.firebase.where('type', 'in', filters.documentCategories));
-        } else {
-            console.warn("Too many document categories selected for a single Firestore 'in' query. Results might be incomplete.");
-            // Fallback to client-side filtering or multiple queries if needed
-        }
     }
 
     try {
@@ -761,10 +798,10 @@ async function fetchDocuments(category = 'all', filters = {}) {
             if (category === 'federal-laws') {
                 if (filters.codeTitle && doc.codeTitle !== filters.codeTitle) matches = false;
                 if (filters.status && doc.status !== filters.status) matches = false;
-                if (filters.sponsor && !(doc.issuingAuthority || '').toLowerCase().includes(filters.sponsor.toLowerCase())) matches = false;
+                if (filters.sponsor && !(doc.sponsor || '').toLowerCase().includes(filters.sponsor.toLowerCase())) matches = false; // Check sponsor
             } else if (category === 'executive-documents') {
-                if (filters.issuingAuthority && doc.issuingAuthority !== filters.issuingAuthority) matches = false;
-                if (filters.documentType && doc.documentType !== filters.documentType) matches = false;
+                if (filters.issuingAuthority && !(doc.issuingAuthority || '').toLowerCase().includes(filters.issuingAuthority.toLowerCase())) matches = false;
+                if (filters.documentType && !(doc.documentType || '').toLowerCase().includes(filters.documentType.toLowerCase())) matches = false;
             } else if (category === 'judicial-documents') {
                 if (filters.court && doc.court !== filters.court) matches = false;
                 if (filters.judgeProsecutor && !(doc.judgeProsecutor || '').toLowerCase().includes(filters.judgeProsecutor.toLowerCase())) matches = false;
@@ -774,11 +811,6 @@ async function fetchDocuments(category = 'all', filters = {}) {
                 if (filters.status && doc.status !== filters.status) matches = false;
                 if (filters.partiesInvolved && !(doc.partiesInvolved || '').toLowerCase().includes(filters.partiesInvolved.toLowerCase())) matches = false;
                 if (filters.titleNumber && !(doc.title || '').toLowerCase().includes(filters.titleNumber.toLowerCase())) matches = false;
-            } else if (category === 'advanced-search') {
-                // If documentCategories were used in 'in' query, this is redundant, but useful for client-side fallback
-                if (filters.documentCategories && filters.documentCategories.length > 0 && !filters.documentCategories.includes(doc.type)) {
-                     matches = false;
-                }
             }
 
             return matches;
@@ -794,7 +826,6 @@ async function fetchDocuments(category = 'all', filters = {}) {
 
 // Admin Panel Functions
 async function setupAdminPanel() {
-    // Ensure Firebase is ready and an authenticated (non-anonymous) user is present
     if (!isFirebaseReady || !auth.currentUser || auth.currentUser.isAnonymous) {
         document.getElementById('admin-document-list').innerHTML = '<p class="text-red-400">Authentication required to access admin features. Please log in.</p>';
         return;
@@ -805,6 +836,7 @@ async function setupAdminPanel() {
     const docTypeSelect = document.getElementById('doc-type');
     const docTitleInput = document.getElementById('doc-title');
     const docSummaryInput = document.getElementById('doc-summary');
+    const docExternalUrlInput = document.getElementById('doc-external-url'); // New URL input
     const dynamicFieldsDiv = document.getElementById('dynamic-fields');
     const adminDocumentListDiv = document.getElementById('admin-document-list');
     const cancelEditButton = document.getElementById('cancel-edit');
@@ -836,7 +868,14 @@ async function setupAdminPanel() {
                     </div>
                     <div>
                         <label for="fl-code-title" class="block text-sm font-medium text-gray-300 mb-1">Code Title</label>
-                        <input type="text" id="fl-code-title" placeholder="e.g., Title 2 - Criminal Law" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" value="${docData.codeTitle || ''}" required>
+                        <select id="fl-code-title" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" required>
+                            <option value="">Select Title</option>
+                            ${federalLawTitles.map(title => `<option value="${title}" ${docData.codeTitle === title ? 'selected' : ''}>${title}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="fl-sponsor" class="block text-sm font-medium text-gray-300 mb-1">Sponsor / Author</label>
+                        <input type="text" id="fl-sponsor" placeholder="e.g., Ivanov" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" value="${docData.sponsor || ''}">
                     </div>
                     <div class="md:col-span-2">
                         <label for="fl-tags" class="block text-sm font-medium text-gray-300 mb-1">Tags (comma-separated)</label>
@@ -856,12 +895,7 @@ async function setupAdminPanel() {
                     </div>
                     <div>
                         <label for="ed-document-type" class="block text-sm font-medium text-gray-300 mb-1">Document Type</label>
-                        <select id="ed-document-type" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" required>
-                            <option value="">Select Type</option>
-                            <option value="Order" ${docData.documentType === 'Order' ? 'selected' : ''}>Order</option>
-                            <option value="Decree" ${docData.documentType === 'Decree' ? 'selected' : ''}>Decree</option>
-                            <option value="Instruction" ${docData.documentType === 'Instruction' ? 'selected' : ''}>Instruction</option>
-                        </select>
+                        <input type="text" id="ed-document-type" placeholder="e.g., Order, Decree" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" value="${docData.documentType || ''}" required>
                     </div>
                     <div>
                         <label for="ed-status" class="block text-sm font-medium text-gray-300 mb-1">Status</label>
@@ -896,6 +930,14 @@ async function setupAdminPanel() {
                             <option value="Civil" ${docData.caseType === 'Civil' ? 'selected' : ''}>Civil</option>
                             <option value="Administrative" ${docData.caseType === 'Administrative' ? 'selected' : ''}>Administrative</option>
                         </select>
+                    </div>
+                    <div>
+                        <label for="jd-plaintiff" class="block text-sm font-medium text-gray-300 mb-1">Plaintiff</label>
+                        <input type="text" id="jd-plaintiff" placeholder="e.g., John Doe" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" value="${docData.plaintiff || ''}">
+                    </div>
+                    <div>
+                        <label for="jd-defendant" class="block text-sm font-medium text-gray-300 mb-1">Defendant</label>
+                        <input type="text" id="jd-defendant" placeholder="e.g., Jane Smith" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm" value="${docData.defendant || ''}">
                     </div>
                     <div>
                         <label for="jd-status" class="block text-sm font-medium text-gray-300 mb-1">Status</label>
@@ -955,8 +997,9 @@ async function setupAdminPanel() {
         const type = docTypeSelect.value;
         const title = docTitleInput.value;
         const summary = docSummaryInput.value;
+        const externalUrl = docExternalUrlInput.value; // Get external URL
 
-        let documentData = { type, title, summary };
+        let documentData = { type, title, summary, externalUrl }; // Include externalUrl
 
         // Collect dynamic fields
         switch (type) {
@@ -965,6 +1008,7 @@ async function setupAdminPanel() {
                 documentData.issuingAuthority = document.getElementById('fl-issuing-authority').value;
                 documentData.status = document.getElementById('fl-status').value;
                 documentData.codeTitle = document.getElementById('fl-code-title').value;
+                documentData.sponsor = document.getElementById('fl-sponsor').value; // New sponsor field
                 documentData.tags = document.getElementById('fl-tags').value;
                 break;
             case 'executive-document':
@@ -978,6 +1022,8 @@ async function setupAdminPanel() {
                 documentData.dateIssued = document.getElementById('jd-date-issued').value;
                 documentData.judgeProsecutor = document.getElementById('jd-judge-prosecutor').value;
                 documentData.caseType = document.getElementById('jd-case-type').value;
+                documentData.plaintiff = document.getElementById('jd-plaintiff').value; // New plaintiff field
+                documentData.defendant = document.getElementById('jd-defendant').value; // New defendant field
                 documentData.status = document.getElementById('jd-status').value;
                 break;
             case 'treaty-resolution':
@@ -990,7 +1036,7 @@ async function setupAdminPanel() {
 
         try {
             // Store documents in the PUBLIC collection
-            const documentsCollection = window.firebase.collection(db, `artifacts/${appId}/public/documents`);
+            const documentsCollection = window.firebase.collection(db, `public_documents`);
             if (docId) {
                 // Update existing document
                 const docRef = window.firebase.doc(documentsCollection, docId);
@@ -1022,7 +1068,7 @@ async function setupAdminPanel() {
     // Admin Logout button
     adminLogoutButton.addEventListener('click', async () => {
         try {
-            await window.firebase.signOut(auth); // Use the globally available auth object
+            await window.firebase.signOut(auth);
             window.showMessageBox("Logged out successfully!");
             renderContent('admin-panel'); // Go back to login screen
         } catch (error) {
@@ -1033,18 +1079,16 @@ async function setupAdminPanel() {
 
 
     // Real-time listener for documents in the PUBLIC collection
-    let adminSnapshotUnsubscribe = null; // To store the unsubscribe function
+    let adminSnapshotUnsubscribe = null;
 
     function setupAdminDocumentListener() {
-        // Unsubscribe from previous listener if it exists
         if (adminSnapshotUnsubscribe) {
             adminSnapshotUnsubscribe();
             adminSnapshotUnsubscribe = null;
         }
 
         if (isFirebaseReady && auth.currentUser && !auth.currentUser.isAnonymous) {
-            // Listen to the PUBLIC collection for admin view
-            const documentsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/public/documents`);
+            const documentsCollectionRef = window.firebase.collection(db, `public_documents`);
             adminSnapshotUnsubscribe = window.firebase.onSnapshot(documentsCollectionRef, (snapshot) => {
                 const documents = [];
                 snapshot.forEach(doc => {
@@ -1085,7 +1129,7 @@ async function setupAdminPanel() {
             button.addEventListener('click', async (e) => {
                 const docId = e.target.dataset.id;
                 // Fetch from PUBLIC collection for editing
-                const docRef = window.firebase.doc(window.firebase.collection(db, `artifacts/${appId}/public/documents`), docId);
+                const docRef = window.firebase.doc(window.firebase.collection(db, `public_documents`), docId);
                 const docSnap = await window.firebase.getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -1093,6 +1137,7 @@ async function setupAdminPanel() {
                     docTypeSelect.value = data.type;
                     docTitleInput.value = data.title;
                     docSummaryInput.value = data.summary;
+                    docExternalUrlInput.value = data.externalUrl || ''; // Populate external URL
                     renderDynamicFields(data.type, data); // Populate dynamic fields
                     cancelEditButton.style.display = 'inline-block';
                     window.showMessageBox("Editing document.");
@@ -1105,10 +1150,10 @@ async function setupAdminPanel() {
         document.querySelectorAll('.delete-doc-btn').forEach(button => {
             button.addEventListener('click', async (e) => {
                 const docId = e.target.dataset.id;
-                if (confirm("Are you sure you want to delete this document?")) { // Using confirm for simplicity in admin panel
+                if (confirm("Are you sure you want to delete this document?")) {
                     try {
                         // Delete from PUBLIC collection
-                        const docRef = window.firebase.doc(window.firebase.collection(db, `artifacts/${appId}/public/documents`), docId);
+                        const docRef = window.firebase.doc(window.firebase.collection(db, `public_documents`), docId);
                         await window.firebase.deleteDoc(docRef);
                         window.showMessageBox("Document deleted successfully!");
                     } catch (error) {
@@ -1127,26 +1172,28 @@ async function setupAdminPanel() {
 
 
 // --- Main Application Entry Point ---
-// This ensures Firebase is ready before any content is rendered.
 document.addEventListener('DOMContentLoaded', async () => {
     const firebaseReadyData = await initializeFirebaseAndAuth();
     if (firebaseReadyData) {
-        // Firebase is ready, render the initial content (Federal Laws)
-        renderContent('federal-laws');
-
-        // Attach event listeners for sidebar links
+        // Set up sidebar links after Firebase is ready
         document.querySelectorAll('.sidebar-link').forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 const category = this.dataset.category;
-                
-                // Now that Firebase is initialized, we can safely render content
                 renderContent(category);
-                // Update active link styling
                 document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active-link'));
                 this.classList.add('active-link');
             });
         });
+
+        // Initial render: default to 'home' page
+        renderContent('home');
+        // Set 'Home' link as active initially
+        const homeLink = document.querySelector('.sidebar-link[data-category="home"]');
+        if (homeLink) {
+            homeLink.classList.add('active-link');
+        }
+
     } else {
         document.getElementById('main-content').innerHTML = '<p class="text-red-400">Failed to load the application. Please check your internet connection and browser console.</p>';
         document.getElementById('breadcrumb-category').textContent = 'Error';
