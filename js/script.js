@@ -37,14 +37,12 @@ const federalLawTitles = [
 ];
 
 // --- Firebase Initialization Function ---
-// This function ensures Firebase is fully set up and authenticated before proceeding.
 async function initializeFirebaseAndAuth() {
     try {
         firebaseApp = initializeApp(firebaseConfig);
         db = getFirestore(firebaseApp);
         auth = getAuth(firebaseApp);
 
-        // Expose Firebase objects to the global window object for easier access
         window.firebase = {
             db,
             auth,
@@ -64,26 +62,23 @@ async function initializeFirebaseAndAuth() {
             signInAnonymously: signInAnonymously
         };
 
-        // Return a promise that resolves once the initial auth state is known
         return new Promise(resolve => {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     currentUserId = user.uid;
                     console.log("Authenticated user:", currentUserId);
                 } else {
-                    // Try to sign in anonymously for public access
                     try {
                         await signInAnonymously(auth);
                         currentUserId = auth.currentUser.uid;
                         console.log("Signed in anonymously:", currentUserId);
                     } catch (error) {
                         console.error("Firebase anonymous authentication error:", error);
-                        // Do NOT show messageBox here, as it might appear even if public access is okay
-                        currentUserId = null; // Ensure it's null if anonymous sign-in truly fails
+                        currentUserId = null;
                     }
                 }
-                isFirebaseReady = true; // Set flag once auth state is determined
-                resolve({ db, auth, currentUserId, appId }); // Resolve the promise
+                isFirebaseReady = true;
+                resolve({ db, auth, currentUserId, appId });
             });
         });
 
@@ -161,7 +156,6 @@ window.showDocumentDetail = function(documentData) {
             break;
     }
     detailContent.innerHTML = contentHtml;
-    // Use the externalUrl if available, otherwise show a generic message
     if (documentData.externalUrl && documentData.externalUrl.startsWith('http')) {
         viewDocumentExternalButton.classList.remove('hidden');
         viewDocumentExternalButton.onclick = () => window.open(documentData.externalUrl, '_blank');
@@ -274,7 +268,7 @@ async function renderContent(category) {
                 </div>
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="home-search-results"></div> <!-- Changed to empty -->
+                    <div id="home-search-results"></div>
                 </div>
             `;
             break;
@@ -323,7 +317,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="federal-laws-results"></div> <!-- Changed to empty -->
+                    <div id="federal-laws-results"></div>
                 </div>
             `;
             break;
@@ -360,7 +354,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="executive-documents-results"></div> <!-- Changed to empty -->
+                    <div id="executive-documents-results"></div>
                 </div>
             `;
             break;
@@ -386,9 +380,9 @@ async function renderContent(category) {
                         <label for="judicial-case-type-filter" class="block text-sm font-medium text-gray-300 mb-1">Case Type</label>
                         <select id="judicial-case-type-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <option value="">Select Type</option>
-                            <option value="criminal">Criminal</option>
-                            <option value="civil">Civil</option>
-                            <option value="administrative">Administrative</option>
+                            <option value="Criminal">Criminal</option>
+                            <option value="Civil">Civil</option>
+                            <option value="Administrative">Administrative</option>
                         </select>
                     </div>
                     <div>
@@ -411,7 +405,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="judicial-documents-results"></div> <!-- Changed to empty -->
+                    <div id="judicial-documents-results"></div>
                 </div>
             `;
             break;
@@ -424,17 +418,17 @@ async function renderContent(category) {
                         <label for="treaty-type-filter" class="block text-sm font-medium text-gray-300 mb-1">Document Type</label>
                         <select id="treaty-type-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <option value="">Select Type</option>
-                            <option value="treaty">Treaty</option>
-                            <option value="resolution">Resolution</option>
+                            <option value="Treaty">Treaty</option>
+                            <option value="Resolution">Resolution</option>
                         </select>
                     </div>
                     <div>
                         <label for="treaty-status-filter" class="block text-sm font-medium text-gray-300 mb-1">Status</label>
                         <select id="treaty-status-filter" class="mt-1 block w-full p-3 border border-gray-500 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <option value="">Select Status</option>
-                            <option value="active">Active</option>
-                            <option value="superseded">Superseded</option>
-                            <option value="pending">Pending</option>
+                            <option value="Active">Active</option>
+                            <option value="Superseded">Superseded</option>
+                            <option value="Pending">Pending</option>
                         </select>
                     </div>
                     <div>
@@ -465,7 +459,7 @@ async function renderContent(category) {
 
                 <div class="mt-10">
                     <h3 class="text-2xl font-bold mb-4 text-blue-300">Search Results</h3>
-                    <div id="treaties-resolutions-results"></div> <!-- Changed to empty -->
+                    <div id="treaties-resolutions-results"></div>
                 </div>
             `;
             break;
@@ -601,7 +595,7 @@ async function renderContent(category) {
 
     // Attach event listeners for search and clear buttons
     if (isFirebaseReady) {
-        if (category === 'home') { // Special handling for the new home page search
+        if (category === 'home') {
             const searchButton = document.getElementById('perform-home-search');
             const clearButton = document.getElementById('clear-home-search');
             const resultsDiv = document.getElementById('home-search-results');
@@ -613,9 +607,8 @@ async function renderContent(category) {
                         keywords: document.getElementById('home-keywords-filter').value,
                         yearFrom: document.getElementById('home-year-from').value,
                         yearTo: document.getElementById('home-year-to').value,
-                        // No documentCategories filter for home page quick search
                     };
-                    const filteredDocs = await fetchDocuments('all', filters); // Fetch all types
+                    const filteredDocs = await fetchDocuments('all', filters);
                     resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
                     attachDocumentCardListeners();
                 });
@@ -625,10 +618,9 @@ async function renderContent(category) {
                     document.getElementById('home-keywords-filter').value = '';
                     document.getElementById('home-year-from').value = '';
                     document.getElementById('home-year-to').value = '';
-                    resultsDiv.innerHTML = ''; // Clear results
+                    resultsDiv.innerHTML = '';
                 });
             }
-            // No initial fetch for home page quick search, results only appear after search button click
         }
         else if (category !== 'admin-panel' && category !== 'archive-help' && category !== 'faqs') {
             const searchButton = document.getElementById(`search-${category.replace('-', '')}`);
@@ -660,6 +652,7 @@ async function renderContent(category) {
                         filters.yearTo = document.getElementById('judicial-year-to').value;
                         filters.keywords = document.getElementById('judicial-keywords-filter').value;
                     } else if (category === 'treaties-resolutions') {
+                        // For treaties, the filter for documentType should match the exact value from Firestore
                         filters.documentType = document.getElementById('treaty-type-filter').value;
                         filters.status = document.getElementById('treaty-status-filter').value;
                         filters.yearFrom = document.getElementById('treaty-year-from').value;
@@ -684,7 +677,7 @@ async function renderContent(category) {
                             el.value = '';
                         }
                     });
-                    resultsDiv.innerHTML = ''; // Clear results
+                    resultsDiv.innerHTML = '';
                 });
             }
             // Initial load of documents for search pages (except Home)
@@ -707,7 +700,7 @@ async function renderContent(category) {
                         try {
                             await window.firebase.signInWithEmailAndPassword(auth, email, password);
                             window.showMessageBox("Logged in successfully!");
-                            renderContent('admin-panel'); // Re-render to show admin content
+                            renderContent('admin-panel');
                         } catch (error) {
                             console.error("Login error:", error);
                             errorMessageDiv.textContent = `Login failed: ${error.message}`;
@@ -730,11 +723,10 @@ function attachDocumentCardListeners() {
             const docId = this.dataset.docId;
             if (docId && db) {
                 try {
-                    // Fetch from the PUBLIC collection
                     const docRef = window.firebase.doc(db, `public_documents`, docId);
                     const docSnap = await window.firebase.getDoc(docRef);
                     if (docSnap.exists()) {
-                        window.showDocumentDetail({ id: docSnap.id, ...docSnap.data() });
+                        window.showDocumentDetail({ id: doc.id, ...docSnap.data() });
                     } else {
                         window.showMessageBox("Document not found.");
                     }
@@ -756,14 +748,32 @@ async function fetchDocuments(category = 'all', filters = {}) {
         return [];
     }
 
-    // Always fetch from the PUBLIC documents collection
     const documentsRef = window.firebase.collection(db, `public_documents`);
     let q = window.firebase.query(documentsRef);
 
-    // Apply category filter if not 'all'
-    if (category !== 'all' && category !== 'admin-panel' && category !== 'home') {
-        q = window.firebase.query(q, window.firebase.where('type', '==', category.replace('-documents', '-document').replace('-laws', '-law').replace('-resolutions', '-resolution')));
+    let docTypeForQuery = '';
+    if (category === 'federal-laws') {
+        docTypeForQuery = 'federal-law';
+    } else if (category === 'executive-documents') {
+        docTypeForQuery = 'executive-document';
+    } else if (category === 'judicial-documents') {
+        docTypeForQuery = 'judicial-document';
+    } else if (category === 'treaties-resolutions') {
+        docTypeForQuery = 'treaty-resolution'; // This is the value from your Firestore document
     }
+
+    console.log(`[fetchDocuments] Category: ${category}, Querying for type: ${docTypeForQuery || 'all types'}`);
+
+    if (docTypeForQuery) {
+        q = window.firebase.query(q, window.firebase.where('type', '==', docTypeForQuery));
+    } else if (category === 'home' && filters.documentCategories && filters.documentCategories.length > 0) {
+        if (filters.documentCategories.length <= 10) {
+             q = window.firebase.query(q, window.firebase.where('type', 'in', filters.documentCategories));
+        } else {
+            console.warn("Too many document categories selected for a single Firestore 'in' query. Results might be incomplete.");
+        }
+    }
+
 
     try {
         const querySnapshot = await window.firebase.getDocs(q);
@@ -772,20 +782,20 @@ async function fetchDocuments(category = 'all', filters = {}) {
             documents.push({ id: doc.id, ...doc.data() });
         });
 
+        console.log(`[fetchDocuments] Documents fetched from Firestore (before client-side filter): ${documents.length}`);
+
         // Client-side filtering for keywords, years, and other specific filters
         documents = documents.filter(doc => {
             let matches = true;
 
-            // Keyword filtering (case-insensitive, checks title, summary, and tags)
             if (filters.keywords) {
                 const keywordLower = filters.keywords.toLowerCase();
-                const docContent = `${doc.title || ''} ${doc.summary || ''} ${doc.tags || ''}`.toLowerCase();
+                const docContent = `${doc.title || ''} ${doc.summary || ''} ${doc.tags || ''} ${doc.codeTitle || ''} ${doc.issuingAuthority || ''} ${doc.judgeProsecutor || ''} ${doc.partiesInvolved || ''} ${doc.sponsor || ''} ${doc.plaintiff || ''} ${doc.defendant || ''}`.toLowerCase();
                 if (!docContent.includes(keywordLower)) {
                     matches = false;
                 }
             }
 
-            // Year range filtering
             const docYear = parseInt(doc.dateEnacted || doc.dateIssued || doc.dateSignedAdopted);
             if (filters.yearFrom && docYear < parseInt(filters.yearFrom)) {
                 matches = false;
@@ -794,11 +804,10 @@ async function fetchDocuments(category = 'all', filters = {}) {
                 matches = false;
             }
 
-            // Specific filters for each category (client-side for demo)
             if (category === 'federal-laws') {
                 if (filters.codeTitle && doc.codeTitle !== filters.codeTitle) matches = false;
                 if (filters.status && doc.status !== filters.status) matches = false;
-                if (filters.sponsor && !(doc.sponsor || '').toLowerCase().includes(filters.sponsor.toLowerCase())) matches = false; // Check sponsor
+                if (filters.sponsor && !(doc.sponsor || '').toLowerCase().includes(filters.sponsor.toLowerCase())) matches = false;
             } else if (category === 'executive-documents') {
                 if (filters.issuingAuthority && !(doc.issuingAuthority || '').toLowerCase().includes(filters.issuingAuthority.toLowerCase())) matches = false;
                 if (filters.documentType && !(doc.documentType || '').toLowerCase().includes(filters.documentType.toLowerCase())) matches = false;
@@ -807,8 +816,10 @@ async function fetchDocuments(category = 'all', filters = {}) {
                 if (filters.judgeProsecutor && !(doc.judgeProsecutor || '').toLowerCase().includes(filters.judgeProsecutor.toLowerCase())) matches = false;
                 if (filters.caseType && doc.caseType !== filters.caseType) matches = false;
             } else if (category === 'treaties-resolutions') {
-                if (filters.documentType && doc.documentType !== filters.documentType) matches = false;
-                if (filters.status && doc.status !== filters.status) matches = false;
+                // IMPORTANT: Ensure these match the exact values in your Firestore documents
+                // The dropdown values are "Treaty" and "Resolution" (capitalized)
+                if (filters.documentType && doc.documentType !== filters.documentType) matches = false; // e.g., "Resolution" (capital R)
+                if (filters.status && doc.status !== filters.status) matches = false; // e.g., "Active" (capital A)
                 if (filters.partiesInvolved && !(doc.partiesInvolved || '').toLowerCase().includes(filters.partiesInvolved.toLowerCase())) matches = false;
                 if (filters.titleNumber && !(doc.title || '').toLowerCase().includes(filters.titleNumber.toLowerCase())) matches = false;
             }
@@ -816,6 +827,7 @@ async function fetchDocuments(category = 'all', filters = {}) {
             return matches;
         });
 
+        console.log(`[fetchDocuments] Documents after client-side filter: ${documents.length}`);
         return documents;
     } catch (error) {
         console.error("Error fetching documents:", error);
@@ -836,14 +848,13 @@ async function setupAdminPanel() {
     const docTypeSelect = document.getElementById('doc-type');
     const docTitleInput = document.getElementById('doc-title');
     const docSummaryInput = document.getElementById('doc-summary');
-    const docExternalUrlInput = document.getElementById('doc-external-url'); // New URL input
+    const docExternalUrlInput = document.getElementById('doc-external-url');
     const dynamicFieldsDiv = document.getElementById('dynamic-fields');
     const adminDocumentListDiv = document.getElementById('admin-document-list');
     const cancelEditButton = document.getElementById('cancel-edit');
     const adminLogoutButton = document.getElementById('admin-logout-button');
 
 
-    // Function to render dynamic fields based on document type
     function renderDynamicFields(type, docData = {}) {
         let fieldsHtml = '';
         switch (type) {
@@ -985,30 +996,27 @@ async function setupAdminPanel() {
         dynamicFieldsDiv.innerHTML = fieldsHtml;
     }
 
-    // Listen for document type change to render dynamic fields
     docTypeSelect.addEventListener('change', () => {
         renderDynamicFields(docTypeSelect.value);
     });
 
-    // Handle form submission (Add/Edit Document)
     documentForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const docId = docIdField.value;
         const type = docTypeSelect.value;
         const title = docTitleInput.value;
         const summary = docSummaryInput.value;
-        const externalUrl = docExternalUrlInput.value; // Get external URL
+        const externalUrl = docExternalUrlInput.value;
 
-        let documentData = { type, title, summary, externalUrl }; // Include externalUrl
+        let documentData = { type, title, summary, externalUrl };
 
-        // Collect dynamic fields
         switch (type) {
             case 'federal-law':
                 documentData.dateEnacted = document.getElementById('fl-date-enacted').value;
                 documentData.issuingAuthority = document.getElementById('fl-issuing-authority').value;
                 documentData.status = document.getElementById('fl-status').value;
                 documentData.codeTitle = document.getElementById('fl-code-title').value;
-                documentData.sponsor = document.getElementById('fl-sponsor').value; // New sponsor field
+                documentData.sponsor = document.getElementById('fl-sponsor').value;
                 documentData.tags = document.getElementById('fl-tags').value;
                 break;
             case 'executive-document':
@@ -1022,8 +1030,8 @@ async function setupAdminPanel() {
                 documentData.dateIssued = document.getElementById('jd-date-issued').value;
                 documentData.judgeProsecutor = document.getElementById('jd-judge-prosecutor').value;
                 documentData.caseType = document.getElementById('jd-case-type').value;
-                documentData.plaintiff = document.getElementById('jd-plaintiff').value; // New plaintiff field
-                documentData.defendant = document.getElementById('jd-defendant').value; // New defendant field
+                documentData.plaintiff = document.getElementById('jd-plaintiff').value;
+                documentData.defendant = document.getElementById('jd-defendant').value;
                 documentData.status = document.getElementById('jd-status').value;
                 break;
             case 'treaty-resolution':
@@ -1035,21 +1043,18 @@ async function setupAdminPanel() {
         }
 
         try {
-            // Store documents in the PUBLIC collection
             const documentsCollection = window.firebase.collection(db, `public_documents`);
             if (docId) {
-                // Update existing document
                 const docRef = window.firebase.doc(documentsCollection, docId);
                 await window.firebase.updateDoc(docRef, documentData);
                 window.showMessageBox("Document updated successfully!");
             } else {
-                // Add new document
                 await window.firebase.addDoc(documentsCollection, documentData);
                 window.showMessageBox("Document added successfully!");
             }
             documentForm.reset();
-            docIdField.value = ''; // Clear ID after save
-            renderDynamicFields(''); // Clear dynamic fields
+            docIdField.value = '';
+            renderDynamicFields('');
             cancelEditButton.style.display = 'none';
         } catch (error) {
             console.error("Error saving document:", error);
@@ -1057,7 +1062,6 @@ async function setupAdminPanel() {
         }
     });
 
-    // Cancel Edit button
     cancelEditButton.addEventListener('click', () => {
         documentForm.reset();
         docIdField.value = '';
@@ -1065,20 +1069,17 @@ async function setupAdminPanel() {
         cancelEditButton.style.display = 'none';
     });
 
-    // Admin Logout button
     adminLogoutButton.addEventListener('click', async () => {
         try {
             await window.firebase.signOut(auth);
             window.showMessageBox("Logged out successfully!");
-            renderContent('admin-panel'); // Go back to login screen
+            renderContent('admin-panel');
         } catch (error) {
             console.error("Logout error:", error);
             window.showMessageBox("Error logging out. Try again.");
         }
     });
 
-
-    // Real-time listener for documents in the PUBLIC collection
     let adminSnapshotUnsubscribe = null;
 
     function setupAdminDocumentListener() {
@@ -1124,11 +1125,9 @@ async function setupAdminPanel() {
             </div>
         `).join('');
 
-        // Attach edit and delete listeners
         document.querySelectorAll('.edit-doc-btn').forEach(button => {
             button.addEventListener('click', async (e) => {
                 const docId = e.target.dataset.id;
-                // Fetch from PUBLIC collection for editing
                 const docRef = window.firebase.doc(window.firebase.collection(db, `public_documents`), docId);
                 const docSnap = await window.firebase.getDoc(docRef);
                 if (docSnap.exists()) {
@@ -1137,8 +1136,8 @@ async function setupAdminPanel() {
                     docTypeSelect.value = data.type;
                     docTitleInput.value = data.title;
                     docSummaryInput.value = data.summary;
-                    docExternalUrlInput.value = data.externalUrl || ''; // Populate external URL
-                    renderDynamicFields(data.type, data); // Populate dynamic fields
+                    docExternalUrlInput.value = data.externalUrl || '';
+                    renderDynamicFields(data.type, data);
                     cancelEditButton.style.display = 'inline-block';
                     window.showMessageBox("Editing document.");
                 } else {
@@ -1152,7 +1151,6 @@ async function setupAdminPanel() {
                 const docId = e.target.dataset.id;
                 if (confirm("Are you sure you want to delete this document?")) {
                     try {
-                        // Delete from PUBLIC collection
                         const docRef = window.firebase.doc(window.firebase.collection(db, `public_documents`), docId);
                         await window.firebase.deleteDoc(docRef);
                         window.showMessageBox("Document deleted successfully!");
@@ -1165,9 +1163,8 @@ async function setupAdminPanel() {
         });
     }
 
-    // Initial render of dynamic fields (empty)
     renderDynamicFields('');
-    setupAdminDocumentListener(); // Start listening for documents
+    setupAdminDocumentListener();
 }
 
 
@@ -1175,7 +1172,6 @@ async function setupAdminPanel() {
 document.addEventListener('DOMContentLoaded', async () => {
     const firebaseReadyData = await initializeFirebaseAndAuth();
     if (firebaseReadyData) {
-        // Set up sidebar links after Firebase is ready
         document.querySelectorAll('.sidebar-link').forEach(link => {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -1186,9 +1182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        // Initial render: default to 'home' page
         renderContent('home');
-        // Set 'Home' link as active initially
         const homeLink = document.querySelector('.sidebar-link[data-category="home"]');
         if (homeLink) {
             homeLink.classList.add('active-link');
