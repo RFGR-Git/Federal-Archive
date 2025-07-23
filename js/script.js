@@ -608,6 +608,7 @@ async function renderContent(category) {
                         yearFrom: document.getElementById('home-year-from').value,
                         yearTo: document.getElementById('home-year-to').value,
                     };
+                    console.log("[Home Page Search] Filters collected:", filters); // Log home page filters
                     const filteredDocs = await fetchDocuments('all', filters);
                     resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
                     attachDocumentCardListeners();
@@ -652,7 +653,6 @@ async function renderContent(category) {
                         filters.yearTo = document.getElementById('judicial-year-to').value;
                         filters.keywords = document.getElementById('judicial-keywords-filter').value;
                     } else if (category === 'treaties-resolutions') {
-                        // For treaties, the filter for documentType should match the exact value from Firestore
                         filters.documentType = document.getElementById('treaty-type-filter').value;
                         filters.status = document.getElementById('treaty-status-filter').value;
                         filters.yearFrom = document.getElementById('treaty-year-from').value;
@@ -661,6 +661,7 @@ async function renderContent(category) {
                         filters.titleNumber = document.getElementById('treaty-title-number-filter').value;
                         filters.keywords = document.getElementById('treaty-keywords-filter').value;
                     }
+                    console.log(`[${category} Search] Filters collected:`, filters); // Log category page filters
 
                     const filteredDocs = await fetchDocuments(category, filters);
                     resultsDiv.innerHTML = generateSearchResultsHtml(filteredDocs);
@@ -726,7 +727,7 @@ function attachDocumentCardListeners() {
                     const docRef = window.firebase.doc(db, `public_documents`, docId);
                     const docSnap = await window.firebase.getDoc(docRef);
                     if (docSnap.exists()) {
-                        window.showDocumentDetail({ id: doc.id, ...docSnap.data() });
+                        window.showDocumentDetail({ id: docSnap.id, ...docSnap.data() }); // Corrected to docSnap.id
                     } else {
                         window.showMessageBox("Document not found.");
                     }
@@ -759,21 +760,14 @@ async function fetchDocuments(category = 'all', filters = {}) {
     } else if (category === 'judicial-documents') {
         docTypeForQuery = 'judicial-document';
     } else if (category === 'treaties-resolutions') {
-        docTypeForQuery = 'treaty-resolution'; // This is the value from your Firestore document
+        docTypeForQuery = 'treaty-resolution';
     }
 
-    console.log(`[fetchDocuments] Category: ${category}, Querying for type: ${docTypeForQuery || 'all types'}`);
+    console.log(`[fetchDocuments] Category: ${category}, Firestore Querying for type: ${docTypeForQuery || 'all types'}`);
 
     if (docTypeForQuery) {
         q = window.firebase.query(q, window.firebase.where('type', '==', docTypeForQuery));
-    } else if (category === 'home' && filters.documentCategories && filters.documentCategories.length > 0) {
-        if (filters.documentCategories.length <= 10) {
-             q = window.firebase.query(q, window.firebase.where('type', 'in', filters.documentCategories));
-        } else {
-            console.warn("Too many document categories selected for a single Firestore 'in' query. Results might be incomplete.");
-        }
     }
-
 
     try {
         const querySnapshot = await window.firebase.getDocs(q);
@@ -783,47 +777,91 @@ async function fetchDocuments(category = 'all', filters = {}) {
         });
 
         console.log(`[fetchDocuments] Documents fetched from Firestore (before client-side filter): ${documents.length}`);
+        console.log(`[fetchDocuments] Client-side filters being applied:`, filters);
 
         // Client-side filtering for keywords, years, and other specific filters
         documents = documents.filter(doc => {
             let matches = true;
+            console.log(`[fetchDocuments] Processing document: ${doc.title} (ID: ${doc.id})`);
 
+            // Keyword filtering (case-insensitive, checks title, summary, and tags)
             if (filters.keywords) {
                 const keywordLower = filters.keywords.toLowerCase();
                 const docContent = `${doc.title || ''} ${doc.summary || ''} ${doc.tags || ''} ${doc.codeTitle || ''} ${doc.issuingAuthority || ''} ${doc.judgeProsecutor || ''} ${doc.partiesInvolved || ''} ${doc.sponsor || ''} ${doc.plaintiff || ''} ${doc.defendant || ''}`.toLowerCase();
                 if (!docContent.includes(keywordLower)) {
                     matches = false;
+                    console.log(`- Filtered by keywords: '${filters.keywords}' (No match in content)`);
+                } else {
+                    console.log(`- Matched by keywords: '${filters.keywords}'`);
                 }
             }
 
+            // Year range filtering
             const docYear = parseInt(doc.dateEnacted || doc.dateIssued || doc.dateSignedAdopted);
             if (filters.yearFrom && docYear < parseInt(filters.yearFrom)) {
                 matches = false;
+                console.log(`- Filtered by yearFrom: ${filters.yearFrom} (Doc year: ${docYear})`);
             }
             if (filters.yearTo && docYear > parseInt(filters.yearTo)) {
                 matches = false;
+                console.log(`- Filtered by yearTo: ${filters.yearTo} (Doc year: ${docYear})`);
             }
 
+            // Specific filters for each category (client-side for demo)
             if (category === 'federal-laws') {
-                if (filters.codeTitle && doc.codeTitle !== filters.codeTitle) matches = false;
-                if (filters.status && doc.status !== filters.status) matches = false;
-                if (filters.sponsor && !(doc.sponsor || '').toLowerCase().includes(filters.sponsor.toLowerCase())) matches = false;
+                if (filters.codeTitle && doc.codeTitle !== filters.codeTitle) {
+                    matches = false;
+                    console.log(`- Federal Laws: Filtered by codeTitle: '${filters.codeTitle}' (Doc codeTitle: '${doc.codeTitle}')`);
+                }
+                if (filters.status && doc.status !== filters.status) {
+                    matches = false;
+                    console.log(`- Federal Laws: Filtered by status: '${filters.status}' (Doc status: '${doc.status}')`);
+                }
+                if (filters.sponsor && !(doc.sponsor || '').toLowerCase().includes(filters.sponsor.toLowerCase())) {
+                    matches = false;
+                    console.log(`- Federal Laws: Filtered by sponsor: '${filters.sponsor}' (Doc sponsor: '${doc.sponsor}')`);
+                }
             } else if (category === 'executive-documents') {
-                if (filters.issuingAuthority && !(doc.issuingAuthority || '').toLowerCase().includes(filters.issuingAuthority.toLowerCase())) matches = false;
-                if (filters.documentType && !(doc.documentType || '').toLowerCase().includes(filters.documentType.toLowerCase())) matches = false;
+                if (filters.issuingAuthority && !(doc.issuingAuthority || '').toLowerCase().includes(filters.issuingAuthority.toLowerCase())) {
+                    matches = false;
+                    console.log(`- Executive Docs: Filtered by issuingAuthority: '${filters.issuingAuthority}' (Doc issuingAuthority: '${doc.issuingAuthority}')`);
+                }
+                if (filters.documentType && !(doc.documentType || '').toLowerCase().includes(filters.documentType.toLowerCase())) {
+                    matches = false;
+                    console.log(`- Executive Docs: Filtered by documentType: '${filters.documentType}' (Doc documentType: '${doc.documentType}')`);
+                }
             } else if (category === 'judicial-documents') {
-                if (filters.court && doc.court !== filters.court) matches = false;
-                if (filters.judgeProsecutor && !(doc.judgeProsecutor || '').toLowerCase().includes(filters.judgeProsecutor.toLowerCase())) matches = false;
-                if (filters.caseType && doc.caseType !== filters.caseType) matches = false;
+                if (filters.court && doc.court !== filters.court) {
+                    matches = false;
+                    console.log(`- Judicial Docs: Filtered by court: '${filters.court}' (Doc court: '${doc.court}')`);
+                }
+                if (filters.judgeProsecutor && !(doc.judgeProsecutor || '').toLowerCase().includes(filters.judgeProsecutor.toLowerCase())) {
+                    matches = false;
+                    console.log(`- Judicial Docs: Filtered by judgeProsecutor: '${filters.judgeProsecutor}' (Doc judgeProsecutor: '${doc.judgeProsecutor}')`);
+                }
+                if (filters.caseType && doc.caseType !== filters.caseType) {
+                    matches = false;
+                    console.log(`- Judicial Docs: Filtered by caseType: '${filters.caseType}' (Doc caseType: '${doc.caseType}')`);
+                }
             } else if (category === 'treaties-resolutions') {
-                // IMPORTANT: Ensure these match the exact values in your Firestore documents
-                // The dropdown values are "Treaty" and "Resolution" (capitalized)
-                if (filters.documentType && doc.documentType !== filters.documentType) matches = false; // e.g., "Resolution" (capital R)
-                if (filters.status && doc.status !== filters.status) matches = false; // e.g., "Active" (capital A)
-                if (filters.partiesInvolved && !(doc.partiesInvolved || '').toLowerCase().includes(filters.partiesInvolved.toLowerCase())) matches = false;
-                if (filters.titleNumber && !(doc.title || '').toLowerCase().includes(filters.titleNumber.toLowerCase())) matches = false;
+                if (filters.documentType && doc.documentType !== filters.documentType) {
+                    matches = false;
+                    console.log(`- Treaties & Res: Filtered by documentType: '${filters.documentType}' (Doc documentType: '${doc.documentType}')`);
+                }
+                if (filters.status && doc.status !== filters.status) {
+                    matches = false;
+                    console.log(`- Treaties & Res: Filtered by status: '${filters.status}' (Doc status: '${doc.status}')`);
+                }
+                if (filters.partiesInvolved && !(doc.partiesInvolved || '').toLowerCase().includes(filters.partiesInvolved.toLowerCase())) {
+                    matches = false;
+                    console.log(`- Treaties & Res: Filtered by partiesInvolved: '${filters.partiesInvolved}' (Doc partiesInvolved: '${doc.partiesInvolved}')`);
+                }
+                if (filters.titleNumber && !(doc.title || '').toLowerCase().includes(filters.titleNumber.toLowerCase())) {
+                    matches = false;
+                    console.log(`- Treaties & Res: Filtered by titleNumber: '${filters.titleNumber}' (Doc title: '${doc.title}')`);
+                }
             }
-
+            console.log(`[fetchDocuments] Document: ${doc.title} - Final match status: ${matches}`);
             return matches;
         });
 
